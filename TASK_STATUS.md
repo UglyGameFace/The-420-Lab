@@ -1,5 +1,8 @@
 # Active task: The 420 Lab evidence-first Discord bot
 
+**CURRENT STATUS (20 October 2026): The planned Phase 2 feature set is implemented on main. Live and unit verification details are in RELEASE_STATUS.md. Earlier notes below are historical and may list work that is now finished.**
+
+
 ## Outcome and scope
 Build a separate, low-cost Discord THC/cannabis education bot using reputable scientific databases, with both potential benefits and adverse effects represented objectively. Keep it separate from Dank Shield and do not copy CannaBot's bundled Leafly data.
 
