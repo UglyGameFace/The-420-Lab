@@ -160,9 +160,36 @@ class DiscordRegistryTests(unittest.TestCase):
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel"})
         self.assertFalse(bot.intents.message_content)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(importlib.util.find_spec("discord"), "discord.py is required")
+class PublicPanelTests(unittest.TestCase):
+    def test_panel_is_persistent_and_has_five_actions(self):
+        from lab.bot import bot
+        from lab.panel import LabPanelView, panel_embed, TOPICS
+        view = LabPanelView(bot)
+        self.assertTrue(view.is_persistent())
+        self.assertEqual(len(view.children), 5)
+        ids = [item.custom_id for item in view.children]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertTrue(all(x.startswith("the420lab:panel:v1:") for x in ids))
+        self.assertIn("Answers are private", panel_embed().footer.text)
+        self.assertIn("risks", TOPICS)
+
+    def test_panel_cooldown_is_bounded(self):
+        from lab.bot import bot
+        bot._panel_access.clear()
+        self.assertEqual(bot.panel_wait(9001001), 0)
+        self.assertGreater(bot.panel_wait(9001001), 0)
+        bot._panel_access.clear()
+
+    def test_publish_command_requires_manage_guild(self):
+        from lab.bot import bot
+        command = bot.tree.get_command("labpanel")
+        self.assertTrue(command.default_permissions.manage_guild)

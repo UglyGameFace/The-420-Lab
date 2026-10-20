@@ -44,3 +44,8 @@ Build a separate, low-cost Discord THC/cannabis education bot using reputable sc
 - Add medically reviewed NCCIH/CDC/FDA guidance and study-quality labels (systematic reviews, clinical trials, observational/preclinical).
 - Evaluate licensed and current cannabis strain data independently before importing anything.
 - Add long-term operational metrics and abuse controls after runtime traffic is measured.
+
+
+## Current active extension: public panel
+
+The user confirmed all three research commands work in Discord. Added a public, persistent Discord science panel with five buttons and private research menus. Publish with /labpanel (Manage Server permission required); member interactions reuse the existing authoritative research handlers. Validations for the new panel include command registry, button IDs/persistence, permission and cooldown regression tests; GitHub Actions and live publication still require verification. No unrelated refactor or new feature branch.

@@ -1,6 +1,8 @@
 """Discord slash commands for cannabis research education."""
 from __future__ import annotations
 import asyncio
+import time
+from collections import OrderedDict
 import logging
 import os
 import aiohttp
@@ -9,6 +11,7 @@ from discord import app_commands
 from discord.ext import commands
 from .sources import COMPOUNDS, ScienceSources, SourceError
 from .answers import GeminiAnswer, ResearchAssistant, clip_discord
+from .panel import LabPanelView, panel_embed
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,7 @@ class LabBot(commands.Bot):
         self.science = None
         self.assistant = None
         self.limiter = asyncio.Semaphore(3)
+        self._panel_access = OrderedDict()
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(
@@ -29,6 +33,8 @@ class LabBot(commands.Bot):
         key = os.getenv("GEMINI_API_KEY", "")
         ai = GeminiAnswer(self.http_session, key, os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")) if key else None
         self.assistant = ResearchAssistant(self.science, ai)
+        # Register the persistent panel before syncing slash commands.
+        self.add_view(LabPanelView(self))
         guild_id = os.getenv("DISCORD_GUILD_ID", "").strip()
         if guild_id:
             guild = discord.Object(id=int(guild_id))
@@ -37,6 +43,54 @@ class LabBot(commands.Bot):
         else:
             await self.tree.sync()
         logger.info("Commands synced; AI configured: %s", bool(ai))
+
+    def panel_wait(self, user_id: int) -> int:
+        """Bounded in-memory cooldown shared by all public panel actions."""
+        now = time.monotonic()
+        previous = self._panel_access.get(user_id)
+        if previous is not None and now - previous < 15:
+            return max(1, int(15 - (now - previous) + 0.999))
+        self._panel_access[user_id] = now
+        self._panel_access.move_to_end(user_id)
+        if len(self._panel_access) > 2048:
+            self._panel_access.popitem(last=False)
+        return 0
+
+    async def research_answer(self, question: str) -> str:
+        try:
+            async with self.limiter:
+                assert self.assistant is not None
+                return clip_discord(await self.assistant.answer(question))
+        except Exception:
+            logger.exception("Research request failed")
+            return "Research lookup failed. Please try again; I won't guess about health effects."
+
+    async def compound_answer(self, name: str) -> str:
+        try:
+            async with self.limiter:
+                assert self.science is not None
+                item = await self.science.compound(name)
+            if item:
+                return (f"**{item.name}**: PubChem CID {item.cid}\n"
+                        f"Formula: {item.formula} | Molecular weight: {item.molecular_weight} g/mol\n"
+                        f"{item.url}\n\nChemistry does not establish health benefits or safe dosing.")
+            return "PubChem did not find a matching record."
+        except (SourceError, ValueError):
+            return "PubChem is temporarily unavailable for that compound."
+
+    async def trials_answer(self, topic: str) -> str:
+        try:
+            async with self.limiter:
+                assert self.science is not None
+                studies = await self.science.trials(topic)
+            if studies:
+                message = "**ClinicalTrials.gov studies**\n" + "\n".join(
+                    f"• {s.title[:100]} ({s.status})\n  {s.url}" for s in studies)
+            else:
+                message = "No matching registered studies found."
+            return clip_discord(message + "\n\nTrial registration does not prove a treatment works.")
+        except SourceError:
+            return "ClinicalTrials.gov is currently unavailable."
 
     async def on_ready(self):
         # Startup diagnostic; never log tokens or user questions.
@@ -58,14 +112,8 @@ bot = LabBot()
 @app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
 async def askthc(interaction: discord.Interaction, question: app_commands.Range[str, 4, 220]):
     await interaction.response.defer(ephemeral=True, thinking=True)
-    try:
-        async with bot.limiter:
-            assert bot.assistant is not None
-            answer = await bot.assistant.answer(question)
-    except Exception:
-        logger.exception("askthc failed")
-        answer = "Research lookup failed. Please try again; I won't guess about health effects."
-    await interaction.followup.send(clip_discord(answer), allowed_mentions=discord.AllowedMentions.none())
+    await interaction.followup.send(await bot.research_answer(question),
+                                    allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="compound", description="View cannabinoid chemistry from NIH PubChem")
@@ -74,19 +122,8 @@ async def askthc(interaction: discord.Interaction, question: app_commands.Range[
 @app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
 async def compound(interaction: discord.Interaction, name: str):
     await interaction.response.defer(ephemeral=True, thinking=True)
-    try:
-        async with bot.limiter:
-            assert bot.science is not None
-            item = await bot.science.compound(name)
-        if item:
-            message = (f"**{item.name}**: PubChem CID {item.cid}\n"
-                       f"Formula: {item.formula} | Molecular weight: {item.molecular_weight} g/mol\n"
-                       f"{item.url}\n\nChemistry does not establish health benefits or safe dosing.")
-        else:
-            message = "PubChem did not find a matching record."
-    except (SourceError, ValueError):
-        message = "PubChem is temporarily unavailable for that compound."
-    await interaction.followup.send(message, allowed_mentions=discord.AllowedMentions.none())
+    await interaction.followup.send(await bot.compound_answer(name),
+                                    allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="trials", description="Find registered cannabis trials on ClinicalTrials.gov")
@@ -94,19 +131,34 @@ async def compound(interaction: discord.Interaction, name: str):
 @app_commands.checks.cooldown(1, 15, key=lambda i: (i.guild_id, i.user.id))
 async def trials(interaction: discord.Interaction, topic: app_commands.Range[str, 3, 100]):
     await interaction.response.defer(ephemeral=True, thinking=True)
+    await interaction.followup.send(await bot.trials_answer(topic),
+                                    allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="labpanel", description="Post the public interactive cannabis science panel")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+async def labpanel(interaction: discord.Interaction):
+    """Only server managers may publish a panel. Members may use its buttons."""
+    if interaction.guild is None or interaction.channel is None:
+        await interaction.response.send_message("Publish this panel in a server channel.", ephemeral=True)
+        return
+    if not (interaction.app_permissions.send_messages and interaction.app_permissions.embed_links):
+        await interaction.response.send_message(
+            "I need Send Messages and Embed Links in this channel to publish the panel.", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
     try:
-        async with bot.limiter:
-            assert bot.science is not None
-            studies = await bot.science.trials(topic)
-        if studies:
-            message = "**ClinicalTrials.gov studies**\n" + "\n".join(
-                f"• {s.title[:100]} ({s.status})\n  {s.url}" for s in studies)
-        else:
-            message = "No matching registered studies found."
-        message += "\n\nTrial registration does not prove a treatment works."
-    except SourceError:
-        message = "ClinicalTrials.gov is currently unavailable."
-    await interaction.followup.send(clip_discord(message), allowed_mentions=discord.AllowedMentions.none())
+        posted = await interaction.channel.send(
+            embed=panel_embed(), view=LabPanelView(bot),
+            allowed_mentions=discord.AllowedMentions.none())
+    except discord.HTTPException:
+        logger.exception("Unable to publish Lab panel")
+        await interaction.followup.send("Could not post the panel. Check my channel permissions.",
+                                        ephemeral=True)
+        return
+    await interaction.followup.send(f"Public panel published: {posted.jump_url}", ephemeral=True)
 
 
 @bot.tree.error

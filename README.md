@@ -40,3 +40,10 @@ Public API references:
 - PubChem PUG REST: https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest
 - ClinicalTrials.gov Data API: https://clinicaltrials.gov/data-api/api
 - Gemini generateContent: https://ai.google.dev/api/generate-content
+
+
+## Public interactive Discord panel
+
+A server manager runs **/labpanel** in the desired text channel to post a public science desk. The bot needs View Channel, Send Messages, Embed Links, and applications.commands. No Administrator permission or Message Content Intent is required. The command enforces **Manage Server** permission at runtime.
+
+The panel stays usable across bot restarts through stable persistent component IDs registered in setup_hook. Any member may press **Ask the Lab**, **Explore Topics**, **Cannabinoids**, **Research Library**, or **Help & Safety**. Topic and molecule pickers, research forms, and registered trial lookup reuse the same three research handlers as the existing slash commands. All query results remain **private** to the member; the public panel does not expose a member's medical questions. A 15-second per-member panel cooldown and the existing shared backend concurrency cap reduce API abuse. Menus timeout after three minutes; members may reopen them from the permanent panel.
