@@ -32,3 +32,9 @@ The agreed foundation and Phase 2 feature plan are implemented in the existing m
 Weekly GitHub workflow: Live public-source smoke. Discloud process-health logging runs about every 15 minutes while connected. All changes live directly on main. Any failed provider check should be investigated against current official API documentation rather than silently replaced with invented information.
 
 There are no outstanding implementation items in the originally agreed bounded Phase 2 feature scope. Further product enhancements or dedicated independent production certification should be treated as new work.
+
+## Quota storage verification follow-up (20 October 2026)
+
+A release-hardening pass added app-owner Discord quota controls, global caps, SQLite continuity markers and associated regression checks. GitHub Actions run 39507434678 succeeded with 68 tests, including separate-Python-process tests that reopen and enforce saved AI pause state, lowered limits and consumed requests. Discloud marked that commit successful.
+
+Host-specific file retention is **not yet independently verified**. Discloud deployment status doesn't expose private filesystem records. The bot now reports whether it found a quota ledger from a previous launch inside /labcontrol, /labhealth and its startup logs. An empty replacement database is classified as an unverified first launch, not a success. Provider-side spending caps must be controlled separately.

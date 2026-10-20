@@ -117,3 +117,13 @@ Run **/labcontrol** as the Discord **application owner**. The private panel show
 Changes apply to the running process without a restart and are stored in the same SQLite quota database. The values cannot exceed the deployment environment ceilings. Environment-level LAB_AI_ENABLED=false always wins, and if no GEMINI_API_KEY is configured, pressing Resume cannot provision a key.
 
 **Only internal bot request budgets are controllable here.** Google's project billing caps, payment details and official quotas are separate provider-account controls and are not modified or claimed to be synchronized. See https://aistudio.google.com/ for external billing controls.
+
+### Verifying quota settings across deployments
+
+Use the private /labcontrol owner panel or /labhealth to see **Quota storage continuity**. The bot also logs the result on startup.
+
+- **First observed launch:** no earlier continuity marker was found. Host-level persistence is not yet verified.
+- **Prior quota ledger found:** metadata survived an earlier process startup.
+- **Prior quota ledger found after a code revision:** saved metadata survived a source-code version change.
+
+This check does not prove backup durability or multi-host shared storage. The quota SQLite file is excluded from Git uploads, and provider billing limits remain separate.

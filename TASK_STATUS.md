@@ -81,3 +81,7 @@ Reviewed request paths after the user's concern that alternate accounts could bu
 Additional abuse controls: added optional LAB_AI_ENABLED=false emergency cutoff and LAB_ALLOWED_GUILDS comma-separated allowlist to restrict costly research to approved servers. No guilds are hard-coded by default, preserving public multi-server use.
 
 2026-10-20 owner usability extension: added Discord app-owner-only `/labcontrol` with pause/resume Gemini, live lowerable quota caps and anonymous usage counters. Settings survive process restart if SQLite data persists and never override deployment ceilings. Google billing controls remain external and require Google account authorization.
+
+## Ledger continuity release follow-up
+
+Added boot-level SQLite continuity markers, startup diagnostics and /labcontrol and /labhealth visibility. A fresh-interpreter integration test confirms persisted AI pause, lowered Gemini cap and consumed quota remain enforceable when the same database is retained. CI passed all 68 tests; GitHub deployment integration reported Discloud success. Real Discloud filesystem retention cannot be established from currently connected tools and remains unverified. No extra branches or credentials required.
