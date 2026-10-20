@@ -4,7 +4,7 @@ import os
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
-from lab.answers import DISCLAIMER, GeminiAnswer, ResearchAssistant
+from lab.answers import DISCLAIMER, GeminiAnswer, ResearchAssistant, study_design, study_links
 from lab.sources import ScienceSources, SourceError, Study
 
 
@@ -156,13 +156,72 @@ class AnswerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(DISCLAIMER, answer)
 
 
+class EvidenceMetadataTests(unittest.IsolatedAsyncioTestCase):
+    async def test_pubmed_indexed_study_design_and_year(self):
+        xml = """<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>31415</PMID>
+        <Article><ArticleTitle>Clinical research</ArticleTitle><Journal>
+        <Title>Medical Review</Title><JournalIssue><PubDate><Year>2025</Year>
+        </PubDate></JournalIssue></Journal><PublicationTypeList>
+        <PublicationType>Randomized Controlled Trial</PublicationType>
+        </PublicationTypeList><Abstract><AbstractText>A limited study.</AbstractText></Abstract>
+        </Article></MedlineCitation></PubmedArticle></PubmedArticleSet>"""
+        fake = FakeSession([DummyResponse({"esearchresult": {"idlist": ["31415"]}}),
+                            DummyResponse(body=xml)])
+        found = await ScienceSources(fake).pubmed("THC safety")
+        self.assertEqual(found[0].year, "2025")
+        self.assertEqual(found[0].publication_types, ("Randomized Controlled Trial",))
+        self.assertIn("Randomized controlled trial", study_links(found))
+        self.assertIn("https://pubmed.ncbi.nlm.nih.gov/31415/", study_links(found))
+
+    async def test_unclassified_study_is_not_labeled_as_proven(self):
+        study = Study("55", "A promising title", "Journal", "No quality data")
+        result = study_links([study])
+        self.assertIn("Design not classified by PubMed", result)
+        self.assertNotIn("High quality", result)
+
+    async def test_medline_date_year_fallback(self):
+        xml = """<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>777</PMID>
+        <Article><ArticleTitle>Example</ArticleTitle><Journal><Title>J</Title>
+        <JournalIssue><PubDate><MedlineDate>2019 Jan-Feb</MedlineDate></PubDate>
+        </JournalIssue></Journal><PublicationTypeList>
+        <PublicationType>Systematic Review</PublicationType>
+        </PublicationTypeList></Article></MedlineCitation></PubmedArticle>
+        </PubmedArticleSet>"""
+        fake = FakeSession([DummyResponse({"esearchresult": {"idlist": ["777"]}}),
+                            DummyResponse(body=xml)])
+        found = await ScienceSources(fake).pubmed("pain")
+        self.assertEqual(found[0].year, "2019")
+        self.assertEqual(study_design(found[0].publication_types), "Systematic review")
+
+
+class OfficialGuideTests(unittest.TestCase):
+    def test_official_domains_only(self):
+        from urllib.parse import urlparse
+        from lab.guidance import GUIDES, guide_message
+        allowed = {"www.nccih.nih.gov", "www.cdc.gov", "www.fda.gov"}
+        self.assertEqual(len(GUIDES), 6)
+        for topic, entry in GUIDES.items():
+            message = guide_message(topic)
+            self.assertIn("not individualized medical advice", message)
+            self.assertLessEqual(len(message), 1900)
+            for _, url in entry.links:
+                parsed = urlparse(url)
+                self.assertEqual(parsed.scheme, "https")
+                self.assertIn(parsed.hostname, allowed)
+                self.assertIn(url, message)
+
+    def test_unknown_guide_is_rejected(self):
+        from lab.guidance import guide_message
+        self.assertNotIn("http", guide_message("https://example.com"))
+
+
 class DiscordRegistryTests(unittest.TestCase):
     def test_expected_slash_commands(self):
         if importlib.util.find_spec("discord") is None:
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -219,6 +278,13 @@ class PublicPanelTests(unittest.TestCase):
         self.assertTrue(all(x.startswith("the420lab:panel:v1:") for x in ids))
         self.assertIn("Answers are private", panel_embed().footer.text)
         self.assertIn("risks", TOPICS)
+
+    def test_library_exposes_official_guides(self):
+        from lab.bot import bot
+        from lab.panel import LibraryMenu, OfficialGuideSelect
+        menu = LibraryMenu(bot, 123)
+        self.assertIn("Official NIH / CDC / FDA Guides", [item.label for item in menu.children])
+        self.assertEqual(len(OfficialGuideSelect().options), 6)
 
     def test_panel_cooldown_is_bounded(self):
         from lab.bot import bot
