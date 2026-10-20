@@ -82,6 +82,44 @@ class QuotaGateTests(unittest.TestCase):
             gate.take_gemini(now=120)
         self.assertEqual(exc.exception.kind, "storage-unavailable")
 
+    def test_owner_lowered_caps_take_effect_and_persist(self):
+        gate = self.gate(LAB_GEMINI_DAILY_LIMIT=5, LAB_GEMINI_MINUTE_LIMIT=5)
+        gate.set_limit("gemini_daily", 1)
+        self.assertEqual(self.gate(LAB_GEMINI_DAILY_LIMIT=5).limit("gemini_daily"), 1)
+        gate.take_gemini(now=120)
+        with self.assertRaises(QuotaExceeded):
+            gate.take_gemini(now=180)
+        gate.set_limit("gemini_daily", 5)
+        gate.take_gemini(now=181)
+        self.assertEqual(gate.limit("gemini_daily"), 5)
+
+    def test_owner_cannot_raise_hosted_hard_ceilings(self):
+        gate = self.gate(LAB_GEMINI_DAILY_LIMIT=3)
+        for proposed in (-1, 0, 4, True, "99999"):
+            with self.assertRaises(ValueError):
+                gate.set_limit("gemini_daily", proposed)
+        with self.assertRaises(ValueError):
+            gate.set_limit("nonexistent", 1)
+
+    def test_owner_pause_blocks_gemini_without_spending_allowance(self):
+        gate = self.gate()
+        gate.set_ai_enabled(False)
+        with self.assertRaises(QuotaExceeded) as denied:
+            gate.take_gemini(now=120)
+        self.assertEqual(denied.exception.kind, "ai-paused")
+        gate.set_ai_enabled(True)
+        self.assertTrue(gate.ai_enabled())
+        gate.take_gemini(now=120)
+
+    def test_environment_kill_switch_cannot_be_overridden_from_discord(self):
+        gate = self.gate()
+        with patch.dict(os.environ, {"LAB_AI_ENABLED": "false"}):
+            self.assertFalse(gate.ai_enabled())
+            with self.assertRaises(ValueError):
+                gate.set_ai_enabled(True)
+            with self.assertRaises(QuotaExceeded):
+                gate.take_gemini(now=120)
+
     def test_anonymous_usage_counters(self):
         gate = self.gate()
         gate.take_gemini()
@@ -133,6 +171,28 @@ class ProtectedNetworkTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(bot.quota, "admit_member") as admitted:
                 self.assertFalse(await bot.admit_interaction(request))
                 admitted.assert_not_called()
+
+    async def test_owner_panel_refuses_non_owner(self):
+        from lab.bot import bot
+        response = SimpleNamespace(send_message=AsyncMock())
+        interaction = SimpleNamespace(user=SimpleNamespace(id=777), response=response)
+        command = bot.tree.get_command("labcontrol")
+        with patch.object(bot, "is_owner", new_callable=AsyncMock, return_value=False):
+            await command.callback(interaction)
+        response.send_message.assert_awaited_once()
+        self.assertIn("application owner", response.send_message.await_args.args[0])
+        self.assertTrue(response.send_message.await_args.kwargs["ephemeral"])
+
+    async def test_owner_panel_checks_every_button_interaction(self):
+        from lab.bot import bot
+        from lab.control import OwnerControlView
+        response = SimpleNamespace(send_message=AsyncMock())
+        interaction = SimpleNamespace(user=SimpleNamespace(id=888), response=response)
+        view = OwnerControlView(bot, owner_id=777)
+        with patch.object(bot, "is_owner", new_callable=AsyncMock, return_value=False):
+            permitted = await view.interaction_check(interaction)
+        self.assertFalse(permitted)
+        self.assertTrue(response.send_message.await_args.kwargs["ephemeral"])
 
     async def test_member_block_is_ephemeral(self):
         from lab.bot import bot
