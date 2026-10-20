@@ -10,7 +10,7 @@ The project was designed after reviewing CannaBot (https://github.com/canna-dev/
 - **/compound name:** Retrieves PubChem molecular formula, molecular weight and compound page for THC, CBD, CBG, CBN or THCA. Chemistry properties do not prove medical effects.
 - **/trials topic:** Finds cannabis study registrations on ClinicalTrials.gov, with explicit warnings that registrations are not proof of efficacy.
 
-Private (ephemeral) responses, per-user cooldowns, concurrent-request limits, short HTTP timeouts, 15-minute in-memory cache, NCBI request pacing below 3 requests/second. No Message Content privileged intent, tracking history, cannabis consumption journals, or user database.
+Private (ephemeral) responses, per-user cooldowns, concurrent-request limits, short HTTP timeouts, 15-minute in-memory cache, NCBI request pacing below 3 requests/second. No Message Content privileged intent, tracking history, cannabis consumption journals, or user database. **Privacy:** AI-enabled questions and relevant study excerpts are sent to the external Gemini API; do not submit identifiable health details. Google says free-tier inputs may be used to improve its products.
 
 ## Setup
 
