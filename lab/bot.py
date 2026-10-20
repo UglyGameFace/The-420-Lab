@@ -33,6 +33,7 @@ class LabBot(commands.Bot):
         self._panel_access = OrderedDict()
         self.health = LabHealth()
         self.quota = QuotaGate()
+        logger.info("Quota ledger at launch: %s", self.quota.continuity_description())
         self._heartbeat_task = None
 
     async def setup_hook(self):
@@ -453,6 +454,7 @@ async def labhealth(interaction: discord.Interaction):
     quota_lines = [f"{name}: {used}/{cap}" if used >= 0 else f"{name}: unavailable" 
                    for name, (used, cap) in bot.quota.usage().items()]
     report += "\n\n**Anonymous daily quotas:** " + " • ".join(quota_lines)
+    report += "\n**Quota storage:** " + bot.quota.continuity_description()
     await interaction.response.send_message(
         report, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 

@@ -36,6 +36,8 @@ def panel(bot) -> discord.Embed:
         color=0x127B52)
     embed.add_field(name="Current limits", value="\n".join(values), inline=False)
     embed.add_field(name="Current UTC-day usage", value=summary, inline=False)
+    embed.add_field(name="Quota storage continuity",
+                    value=quota.continuity_description(), inline=False)
     embed.add_field(name="Important boundary",
                     value=("These are **The 420 Lab's** limits, not Google's official "
                            "billing caps. Values cannot exceed the private hosting ceilings. "
