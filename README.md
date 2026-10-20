@@ -108,3 +108,12 @@ This is quota defense, not a guarantee against every denial-of-service technique
 ### Emergency controls
 
 Set `LAB_AI_ENABLED=false` in your private Discloud environment and restart **The 420 Lab** to completely disable Gemini requests while keeping PubMed paper links available. You may optionally set `LAB_ALLOWED_GUILDS` to comma-separated numeric Discord server IDs to restrict all quota-gated research operations to those servers. When unset, permitted guilds still share the bot-wide budget. Both controls are off/on configuration switches, not a substitute for provider-side spend caps or key rotation.
+
+
+### Discord-native app-owner quota controls
+
+Run **/labcontrol** as the Discord **application owner**. The private panel shows current limits and anonymous daily usage, offers **Pause / Resume Gemini**, and a dropdown for editing eight bot usage limits. It validates application ownership before opening and before every mutation, not just Manage Server. Admins who are not the application owner cannot alter global limits.
+
+Changes apply to the running process without a restart and are stored in the same SQLite quota database. The values cannot exceed the deployment environment ceilings. Environment-level LAB_AI_ENABLED=false always wins, and if no GEMINI_API_KEY is configured, pressing Resume cannot provision a key.
+
+**Only internal bot request budgets are controllable here.** Google's project billing caps, payment details and official quotas are separate provider-account controls and are not modified or claimed to be synchronized. See https://aistudio.google.com/ for external billing controls.

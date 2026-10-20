@@ -18,6 +18,7 @@ from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
 from .health import LabHealth
 from .quotas import QuotaGate, QuotaExceeded
+from .control import OwnerControlView, panel as owner_panel
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +42,8 @@ class LabBot(commands.Bot):
         self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""),
                                      os.getenv("OPENFDA_API_KEY", ""), quota=self.quota)
         key = os.getenv("GEMINI_API_KEY", "")
-        ai_enabled = os.getenv("LAB_AI_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
         ai = GeminiAnswer(self.http_session, key, os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
-                          quota=self.quota) if key and ai_enabled else None
+                          quota=self.quota) if key else None
         self.assistant = ResearchAssistant(self.science, ai)
         # Register the persistent panel before syncing slash commands.
         self.add_view(LabPanelView(self))
@@ -420,6 +420,28 @@ async def labpanelupdate(interaction: discord.Interaction, message_link: str,
         "Panel style updated. All existing buttons remain usable.", ephemeral=True)
 
 
+@bot.tree.command(name="labcontrol", description="Application-owner control panel for AI usage and safe limits")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+async def labcontrol(interaction: discord.Interaction):
+    """Owner only. Administrator visibility does NOT grant runtime access."""
+    if not await bot.is_owner(interaction.user):
+        await interaction.response.send_message(
+            "Only The 420 Lab's Discord application owner can open this control panel.",
+            ephemeral=True)
+        return
+    try:
+        details = owner_panel(bot)
+    except QuotaExceeded:
+        await interaction.response.send_message(
+            "Quota storage is unavailable. Paid requests will remain blocked for safety.",
+            ephemeral=True)
+        return
+    await interaction.response.send_message(
+        embed=details, view=OwnerControlView(bot, interaction.user.id), ephemeral=True,
+        allowed_mentions=discord.AllowedMentions.none())
+
+
 @bot.tree.command(name="labhealth", description="Show The 420 Lab's process status (server managers)")
 @app_commands.guild_only()
 @app_commands.default_permissions(manage_guild=True)
@@ -427,7 +449,7 @@ async def labpanelupdate(interaction: discord.Interaction, message_link: str,
 async def labhealth(interaction: discord.Interaction):
     report = bot.health.report(
         len(bot.guilds), len(bot.science._cache) if bot.science else 0,
-        ai_enabled=bool(bot.assistant and bot.assistant.ai))
+        ai_enabled=bool(bot.assistant and bot.assistant.ai and bot.quota.ai_enabled()))
     quota_lines = [f"{name}: {used}/{cap}" if used >= 0 else f"{name}: unavailable" 
                    for name, (used, cap) in bot.quota.usage().items()]
     report += "\n\n**Anonymous daily quotas:** " + " • ".join(quota_lines)
