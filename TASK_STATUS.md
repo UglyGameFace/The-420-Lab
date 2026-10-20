@@ -4,7 +4,7 @@
 Build a separate, low-cost Discord THC/cannabis education bot using reputable scientific databases, with both potential benefits and adverse effects represented objectively. Keep it separate from Dank Shield and do not copy CannaBot's bundled Leafly data.
 
 ## Status
-- Initial foundation implemented on main; not yet validated in a real Discord guild or Discloud runtime.
+- Initial foundation implemented on main; user reports creating the Discloud application and setting environment variables, but runtime status and values have not been independently inspected.
 - Commands: /askthc, /compound, /trials.
 - Backends: PubMed E-utilities (article search and XML abstracts), NIH PubChem chemistry, ClinicalTrials.gov registrations.
 - Optional Gemini 3.5 Flash-Lite synthesis only when configured. Research-link fallback works without AI credentials.
@@ -20,8 +20,9 @@ Build a separate, low-cost Discord THC/cannabis education bot using reputable sc
 - Source adapters include NCBI pacing, 15-minute bounded in-memory cache, bounded query/results, HTTP timeout and provider errors.
 - Discord responses are private, with per-user cooldowns, bounded concurrency and no message-content privileged intent.
 - Test workflow: .github/workflows/tests.yml (unittest and compileall).
-- 12 local unit tests passed on a closely equivalent working copy using mocked public API responses, including empty/error inputs, identifier validation, caching, missing AI, link handling and long-answer bounds.
-- Static compilation passed on the working copy.
+- 13 local unit tests passed on an updated, closely equivalent working copy using mocked public API responses. One Discord command-registry test was skipped locally because discord.py was unavailable; it remains enabled in CI after dependencies install. Tests cover source error handling, CBD-focused search, parsing, caching, URL safety and disclaimers.
+- Static compilation passed on the updated working copy.
+- Fixed stale footer assertion after privacy wording changed; added CBD-relevance regression test and startup gateway-ready log.
 - **Remote GitHub Actions results were not independently confirmed**; connector's commit workflow lookup reports PR-triggered runs only, and combined status returned no status contexts.
 - Live Discord sync, Gemini output/quota, PubChem name resolution, ClinicalTrials.gov matching, PubMed service behavior from Discloud and hosting startup remain untested.
 
@@ -31,8 +32,11 @@ Build a separate, low-cost Discord THC/cannabis education bot using reputable sc
 - No CannaBot source or third-party dataset was imported, avoiding conflicting THC estimates and third-party asset licensing.
 
 ## Blockers and next step
-- Needs a private Discord bot token to run, and a hosting configuration. For AI conversational summaries, a private Gemini API key is required.
-- First perform GitHub Actions check, then configure bot credentials privately, register commands in a test server, and test the three commands using real upstream responses. Inspect errors and correct issues before any public rollout.
+- User reports configuring environment variables on Discloud; do not request or print credential values. Verify current deployed commit matches main and app is running.
+- Inspect GitHub Actions after the latest main commit; this environment cannot retrieve push-run conclusions via the connected GitHub workflow tool.
+- Confirm Discloud logs contain `Commands synced; AI configured: True` (if Gemini configured) and `Discord gateway ready`.
+- Verify `/compound name:THC`, `/trials topic:sleep`, and `/askthc question:What are the risks of THC?` in the intended guild; capture error types/status only, never secrets or identifiable health details.
+- Fix any live provider/command issue before production rollout. No verified live success is claimed.
 
 ## Backlog (same project; not concurrently active)
 - Add openFDA medication labeling/adverse-event context with warnings about spontaneous-report bias.
