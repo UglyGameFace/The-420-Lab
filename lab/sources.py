@@ -32,6 +32,8 @@ class Study:
     title: str
     journal: str
     abstract: str
+    publication_types: tuple[str, ...] = ()
+    year: str = ""
 
     @property
     def url(self) -> str:
@@ -161,7 +163,18 @@ class ScienceSources:
             journal = item.findtext(".//Article/Journal/Title", "Unknown journal").strip()
             sections = item.findall(".//Article/Abstract/AbstractText")
             abstract = " ".join(" ".join(n.itertext()).strip() for n in sections).strip()
-            studies.append(Study(pmid, title[:220], journal[:120], abstract[:2400]))
+            publication_types = tuple(
+                (element.text or "").strip()[:100]
+                for element in item.findall(".//Article/PublicationTypeList/PublicationType")
+                if (element.text or "").strip()
+            )
+            year = item.findtext(".//Article/Journal/JournalIssue/PubDate/Year", "").strip()
+            if not year:
+                medline_date = item.findtext(".//Article/Journal/JournalIssue/PubDate/MedlineDate", "")
+                date_match = re.search(r"[12][0-9]{3}", medline_date)
+                year = date_match.group(0) if date_match else ""
+            studies.append(Study(pmid, title[:220], journal[:120], abstract[:2400],
+                                 publication_types, year))
         return studies
 
     async def compound(self, name: str) -> Compound | None:
