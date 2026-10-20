@@ -35,14 +35,27 @@ class LabBot(commands.Bot):
         self.assistant = ResearchAssistant(self.science, ai)
         # Register the persistent panel before syncing slash commands.
         self.add_view(LabPanelView(self))
+        await self.sync_commands()
+        logger.info("AI configured: %s", bool(ai))
+
+    async def sync_commands(self):
+        """Publish globally for all servers and refresh the optional test guild."""
+        expected = {command.name for command in self.tree.get_commands()}
+        global_synced = await self.tree.sync()
+        global_names = {command.name for command in global_synced}
+        logger.info("Global commands synced: %s", ", ".join(sorted(global_names)))
+        if expected - global_names:
+            raise RuntimeError("Discord global sync omitted locally registered commands")
+
         guild_id = os.getenv("DISCORD_GUILD_ID", "").strip()
         if guild_id:
             guild = discord.Object(id=int(guild_id))
             self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-        else:
-            await self.tree.sync()
-        logger.info("Commands synced; AI configured: %s", bool(ai))
+            guild_synced = await self.tree.sync(guild=guild)
+            guild_names = {command.name for command in guild_synced}
+            logger.info("Guild %s commands synced: %s", guild_id, ", ".join(sorted(guild_names)))
+            if expected - guild_names:
+                raise RuntimeError("Discord guild sync omitted locally registered commands")
 
     def panel_wait(self, user_id: int) -> int:
         """Bounded in-memory cooldown shared by all public panel actions."""

@@ -1,7 +1,9 @@
 """Network-mocked regression tests. No live tokens required."""
 import importlib.util
+import os
+from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from lab.answers import DISCLAIMER, GeminiAnswer, ResearchAssistant
 from lab.sources import ScienceSources, SourceError, Study
 
@@ -167,6 +169,42 @@ class DiscordRegistryTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+@unittest.skipUnless(importlib.util.find_spec("discord"), "discord.py is required")
+class CommandSyncScopeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_global_and_configured_guild_are_both_synced(self):
+        from lab.bot import bot
+        synced = [SimpleNamespace(name=c.name) for c in bot.tree.get_commands()]
+        self.assertIn("labpanel", {c.name for c in synced})
+        with patch.dict(os.environ, {"DISCORD_GUILD_ID": "1514374173517152418"}):
+            with patch.object(bot.tree, "sync", new_callable=AsyncMock) as do_sync:
+                with patch.object(bot.tree, "copy_global_to") as copied:
+                    do_sync.return_value = synced
+                    await bot.sync_commands()
+        self.assertEqual(do_sync.await_count, 2)
+        self.assertEqual(do_sync.await_args_list[0].kwargs, {})
+        self.assertEqual(do_sync.await_args_list[1].kwargs["guild"].id, 1514374173517152418)
+        copied.assert_called_once()
+
+    async def test_unconfigured_guild_keeps_global_commands_current(self):
+        from lab.bot import bot
+        synced = [SimpleNamespace(name=c.name) for c in bot.tree.get_commands()]
+        with patch.dict(os.environ, {"DISCORD_GUILD_ID": ""}):
+            with patch.object(bot.tree, "sync", new_callable=AsyncMock) as do_sync:
+                with patch.object(bot.tree, "copy_global_to") as copied:
+                    do_sync.return_value = synced
+                    await bot.sync_commands()
+        do_sync.assert_awaited_once_with()
+        copied.assert_not_called()
+
+    async def test_missing_command_fails_sync_check(self):
+        from lab.bot import bot
+        with patch.dict(os.environ, {"DISCORD_GUILD_ID": ""}):
+            with patch.object(bot.tree, "sync", new_callable=AsyncMock) as do_sync:
+                do_sync.return_value = [SimpleNamespace(name="askthc")]
+                with self.assertRaisesRegex(RuntimeError, "omitted"):
+                    await bot.sync_commands()
 
 @unittest.skipUnless(importlib.util.find_spec("discord"), "discord.py is required")
 class PublicPanelTests(unittest.TestCase):
