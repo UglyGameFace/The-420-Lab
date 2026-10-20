@@ -316,7 +316,7 @@ class DiscordRegistryTests(unittest.TestCase):
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -393,6 +393,34 @@ class PublicPanelTests(unittest.TestCase):
         from lab.panel import LibraryMenu
         self.assertIn("Strain Name Reference",
                       [item.label for item in LibraryMenu(bot, 123).children])
+
+    def test_custom_panel_theme_title_and_intro_are_safe(self):
+        from lab.panel import panel_embed, PANEL_THEMES, safe_panel_text
+        embed = panel_embed("@everyone http://evil.example Science", "Welcome to science", "violet")
+        self.assertIn("Science", embed.title)
+        self.assertNotIn("@everyone", embed.title)
+        self.assertNotIn("evil.example", embed.title)
+        self.assertIn("Welcome to science", embed.description)
+        self.assertEqual(embed.colour.value, PANEL_THEMES["violet"])
+        self.assertEqual(safe_panel_text(None, max_length=30), "")
+        self.assertEqual(len(safe_panel_text("X" * 200, max_length=40)), 40)
+
+    def test_panel_link_stays_within_server_and_channel(self):
+        from lab.bot import extract_panel_message_id
+        guild = 1514374173517152418
+        channel = 123456789012345678
+        message = 987654321098765432
+        valid = f"https://discord.com/channels/{guild}/{channel}/{message}"
+        self.assertEqual(extract_panel_message_id(valid, guild, channel), message)
+        self.assertEqual(extract_panel_message_id(str(message), guild, channel), message)
+        self.assertIsNone(extract_panel_message_id(valid, 987654321012345678, channel))
+        self.assertIsNone(extract_panel_message_id(valid, guild, 999999999999999999))
+        self.assertIsNone(extract_panel_message_id("https://evil.example", guild, channel))
+
+    def test_panel_update_is_restricted_to_managers(self):
+        from lab.bot import bot
+        command = bot.tree.get_command("labpanelupdate")
+        self.assertTrue(command.default_permissions.manage_guild)
 
     def test_panel_cooldown_is_bounded(self):
         from lab.bot import bot
