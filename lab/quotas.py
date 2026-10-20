@@ -7,6 +7,7 @@ prioritize preventing quota exhaustion over maximum throughput.
 from __future__ import annotations
 from collections import OrderedDict, deque
 from contextlib import closing
+import hashlib
 import os
 from pathlib import Path
 import sqlite3
@@ -45,6 +46,9 @@ class QuotaGate:
         self.api_daily = _setting("LAB_PROVIDER_DAILY_LIMIT", 1200)
         self.users: OrderedDict[int, deque[float]] = OrderedDict()
         self.guilds: OrderedDict[int, deque[float]] = OrderedDict()
+        self.ledger_seen_before = False
+        self.previous_code_revision = False
+        self.boot_number = 0
         self._initialize()
 
     LIMIT_FIELDS = (
@@ -136,6 +140,37 @@ class QuotaGate:
             db.execute("""CREATE TABLE IF NOT EXISTS guard_settings (
                 name TEXT PRIMARY KEY, value INTEGER NOT NULL
             )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS guard_metadata (
+                name TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )""")
+            prior_boot = db.execute(
+                "SELECT value FROM guard_metadata WHERE name='boots'").fetchone()
+            prior_hash = db.execute(
+                "SELECT value FROM guard_metadata WHERE name='code_hash'").fetchone()
+            self.boot_number = int(prior_boot[0]) + 1 if prior_boot else 1
+            self.ledger_seen_before = bool(prior_boot)
+            # Fingerprint source code only, never member details or API credentials.
+            current_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
+            self.previous_code_revision = bool(
+                prior_hash and prior_hash[0] != current_hash)
+            for key, value in (
+                ("boots", str(self.boot_number)),
+                ("code_hash", current_hash),
+                ("last_boot_utc", str(int(time.time()))),
+            ):
+                db.execute(
+                    """INSERT INTO guard_metadata(name,value) VALUES (?,?)
+                    ON CONFLICT(name) DO UPDATE SET value=excluded.value""",
+                    (key, value))
+
+    def continuity_description(self) -> str:
+        if self.previous_code_revision:
+            return "Prior quota ledger found after a code revision"
+        if self.ledger_seen_before:
+            return f"Prior quota ledger found (launch {self.boot_number})"
+        return "First observed launch; host-file persistence is unverified"
+
 
 
     def _take_global(self, category: str, quotas: tuple[tuple[str, int, int], ...],
