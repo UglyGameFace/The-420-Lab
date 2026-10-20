@@ -56,6 +56,19 @@ class SourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await ScienceSources(fake).pubmed("sleep"), [])
         self.assertEqual(len(fake.calls), 1)
 
+    async def test_cbd_only_question_retrieves_cbd_literature(self):
+        fake = FakeSession([
+            DummyResponse({"esearchresult": {"idlist": []}}),
+            DummyResponse({"esearchresult": {"idlist": []}})])
+        science = ScienceSources(fake)
+        await science.pubmed("Can CBD help with anxiety?")
+        await science.pubmed("How do THC and CBD differ?")
+        cbd_term = fake.calls[0][1]["params"]["term"]
+        comparison_term = fake.calls[1][1]["params"]["term"]
+        self.assertIn("cannabidiol[Title/Abstract]", cbd_term)
+        self.assertNotIn("tetrahydrocannabinol[Title/Abstract]", cbd_term)
+        self.assertIn("tetrahydrocannabinol[Title/Abstract]", comparison_term)
+
     async def test_pubchem_allowlisted(self):
         fake = FakeSession([DummyResponse({"PropertyTable": {"Properties": [
             {"CID": 123, "MolecularFormula": "C21H30O2", "MolecularWeight": "314.5"}]}})])
