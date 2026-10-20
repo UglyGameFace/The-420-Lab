@@ -310,13 +310,27 @@ class StrainCatalogTests(unittest.TestCase):
         self.assertIn("MIT License", notice)
 
 
+class HealthTelemetryTests(unittest.TestCase):
+    def test_counters_are_bounded_and_private(self):
+        from lab.health import LabHealth
+        health = LabHealth()
+        health.record("research")
+        health.record("trials")
+        health.record("@everyone")
+        self.assertEqual(sum(health.counts.values()), 2)
+        message = health.report(2, 9, ai_enabled=False)
+        self.assertIn("Connected servers: 2", message)
+        self.assertIn("research: 1", message)
+        self.assertIn("Data resets on restarts", message)
+        self.assertNotIn("@everyone", message)
+
 class DiscordRegistryTests(unittest.TestCase):
     def test_expected_slash_commands(self):
         if importlib.util.find_spec("discord") is None:
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate", "labhealth"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -421,6 +435,10 @@ class PublicPanelTests(unittest.TestCase):
         from lab.bot import bot
         command = bot.tree.get_command("labpanelupdate")
         self.assertTrue(command.default_permissions.manage_guild)
+
+    def test_process_health_requires_manage_server(self):
+        from lab.bot import bot
+        self.assertTrue(bot.tree.get_command("labhealth").default_permissions.manage_guild)
 
     def test_panel_cooldown_is_bounded(self):
         from lab.bot import bot
