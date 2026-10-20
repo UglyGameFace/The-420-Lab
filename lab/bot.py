@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import time
+import re
 from collections import OrderedDict
 import logging
 import os
@@ -11,7 +12,7 @@ from discord import app_commands
 from discord.ext import commands
 from .sources import COMPOUNDS, ScienceSources, SourceError
 from .answers import GeminiAnswer, ResearchAssistant, clip_discord
-from .panel import LabPanelView, panel_embed
+from .panel import LabPanelView, panel_embed, PANEL_THEMES
 from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
@@ -200,10 +201,25 @@ async def strain(interaction: discord.Interaction, name: app_commands.Range[str,
 @app_commands.guild_only()
 @app_commands.default_permissions(manage_guild=True)
 @app_commands.checks.has_permissions(manage_guild=True)
-async def labpanel(interaction: discord.Interaction):
+@app_commands.describe(
+    title="Optional panel title (up to 75 characters)",
+    intro="Optional short welcome line (up to 240 characters)",
+    theme="Panel accent color",
+    preview="Show the panel to only yourself instead of publishing")
+@app_commands.choices(theme=[
+    app_commands.Choice(name=name.capitalize(), value=name) for name in PANEL_THEMES
+])
+async def labpanel(interaction: discord.Interaction, title: str | None = None,
+                   intro: str | None = None, theme: str = "forest",
+                   preview: bool = False):
     """Only server managers may publish a panel. Members may use its buttons."""
     if interaction.guild is None or interaction.channel is None:
         await interaction.response.send_message("Publish this panel in a server channel.", ephemeral=True)
+        return
+    if preview:
+        await interaction.response.send_message(
+            embed=panel_embed(title, intro, theme), view=LabPanelView(bot),
+            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         return
     if not (interaction.app_permissions.send_messages and interaction.app_permissions.embed_links):
         await interaction.response.send_message(
@@ -212,7 +228,7 @@ async def labpanel(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True, thinking=True)
     try:
         posted = await interaction.channel.send(
-            embed=panel_embed(), view=LabPanelView(bot),
+            embed=panel_embed(title, intro, theme), view=LabPanelView(bot),
             allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
         logger.exception("Unable to publish Lab panel")
@@ -220,6 +236,67 @@ async def labpanel(interaction: discord.Interaction):
                                         ephemeral=True)
         return
     await interaction.followup.send(f"Public panel published: {posted.jump_url}", ephemeral=True)
+
+
+def extract_panel_message_id(value: str, guild_id: int, channel_id: int) -> int | None:
+    """Accept only an ID or a Discord message link for this server/channel."""
+    value = value.strip()
+    if re.fullmatch(r"\d{17,21}", value):
+        return int(value)
+    found = re.fullmatch(
+        r"https://(?:discord\.com|discordapp\.com)/channels/(\d{17,21})/(\d{17,21})/(\d{17,21})/?",
+        value)
+    if found and int(found.group(1)) == guild_id and int(found.group(2)) == channel_id:
+        return int(found.group(3))
+    return None
+
+
+@bot.tree.command(name="labpanelupdate", description="Restyle an existing Lab panel message in this channel")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(
+    message_link="Copy Message Link on the existing panel (or its message ID)",
+    title="Updated title", intro="Updated short introduction", theme="New accent color")
+@app_commands.choices(theme=[
+    app_commands.Choice(name=name.capitalize(), value=name) for name in PANEL_THEMES
+])
+async def labpanelupdate(interaction: discord.Interaction, message_link: str,
+                         title: str | None = None, intro: str | None = None,
+                         theme: str = "forest"):
+    if interaction.guild is None or interaction.channel is None:
+        await interaction.response.send_message("Use this inside a server text channel.", ephemeral=True)
+        return
+    message_id = extract_panel_message_id(message_link, interaction.guild.id, interaction.channel.id)
+    if message_id is None:
+        await interaction.response.send_message(
+            "Use a message ID or a panel link from this same channel.", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    try:
+        message = await interaction.channel.fetch_message(message_id)
+        if bot.user is None or message.author.id != bot.user.id:
+            await interaction.followup.send("That message wasn't posted by The 420 Lab.", ephemeral=True)
+            return
+        ids = [
+            child.custom_id
+            for component in message.components for child in getattr(component, "children", ())
+            if getattr(child, "custom_id", None)
+        ]
+        if not any(cid.startswith("the420lab:panel:v1:") for cid in ids):
+            await interaction.followup.send("That isn't a The 420 Lab panel message.", ephemeral=True)
+            return
+        await message.edit(
+            embed=panel_embed(title, intro, theme),
+            view=LabPanelView(bot), allowed_mentions=discord.AllowedMentions.none())
+    except discord.HTTPException:
+        logger.exception("Unable to update Lab panel message")
+        await interaction.followup.send(
+            "Can't edit that panel. I may need Read Message History and Send Messages here.",
+            ephemeral=True)
+        return
+    await interaction.followup.send(
+        "Panel style updated. All existing buttons remain usable.", ephemeral=True)
 
 
 @bot.tree.error
