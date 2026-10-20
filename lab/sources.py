@@ -14,6 +14,13 @@ from .fda import FDA_PRODUCTS, FDA_ENDPOINT, parse_terms
 NCBI = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 PUBCHEM = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 TRIALS = "https://clinicaltrials.gov/api/v2/studies"
+PUBMED_FILTERS = {
+    "all": "",
+    "systematic": '"Systematic Review"[Publication Type]',
+    "randomized": '"Randomized Controlled Trial"[Publication Type]',
+    "observational": '"Observational Study"[Publication Type]',
+}
+
 COMPOUNDS = {
     "THC": "delta-9-tetrahydrocannabinol",
     "CBD": "cannabidiol",
@@ -118,13 +125,16 @@ class ScienceSources:
             self._cache.popitem(last=False)
         return result
 
-    async def pubmed(self, question: str) -> list[Study]:
+    async def pubmed(self, question: str, kind: str = "all") -> list[Study]:
         question = question.strip()[:220]
+        if kind not in PUBMED_FILTERS:
+            raise ValueError("Unsupported PubMed design filter")
         if not question:
             return []
-        return await self._cached(("pubmed", question.lower()), lambda: self._pubmed(question))
+        return await self._cached(
+            ("pubmed", question.lower(), kind), lambda: self._pubmed(question, kind))
 
-    async def _pubmed(self, question: str) -> list[Study]:
+    async def _pubmed(self, question: str, kind: str) -> list[Study]:
         stopwords = {"what", "does", "with", "about", "could", "would", "should", "which", "these",
                      "those", "have", "been", "from", "they", "them", "that", "this", "are",
                      "can", "the", "and", "for", "how", "why", "thc", "cbd", "cannabis", "weed",
@@ -141,6 +151,8 @@ class ScienceSources:
             term = "(cannabis[Title/Abstract] OR cannabinoid*[Title/Abstract] OR tetrahydrocannabinol[Title/Abstract])"
         if keywords:
             term += " AND (" + " OR ".join(f"{w}[Title/Abstract]" for w in keywords) + ")"
+        if PUBMED_FILTERS[kind]:
+            term += " AND " + PUBMED_FILTERS[kind]
         params = {"db": "pubmed", "term": term, "retmode": "json", "retmax": "3",
                   "sort": "relevance", "tool": "The420Lab"}
         if self.api_key:
