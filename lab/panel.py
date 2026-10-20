@@ -42,7 +42,7 @@ def safe_panel_text(value: str | None, *, max_length: int) -> str:
 
 def panel_embed(title: str | None = None, intro: str | None = None,
                 theme: str = "forest") -> discord.Embed:
-    heading = safe_panel_text(title, max_length=75) or "THE 420 LAB | Cannabis Science Desk"
+    heading = safe_panel_text(title, max_length=75) or "THE WEED DOCTOR | Cannabis Science Desk"
     opening = safe_panel_text(intro, max_length=240) or (
         "Learn about THC, CBD, and cannabis using published research and official health guidance."
     )
@@ -51,11 +51,11 @@ def panel_embed(title: str | None = None, intro: str | None = None,
         description=f"**{opening}**\nChoose a button to explore benefits and risks, "
                     "cannabinoids, research, and historical strain names.",
         color=PANEL_THEMES.get(theme, PANEL_THEMES["forest"]))
-    embed.add_field(name="🧠 Ask the Lab", value="Enter your own question about effects or science.", inline=False)
+    embed.add_field(name="🧠 Ask the Doctor", value="Enter your own question about effects or science.", inline=False)
     embed.add_field(name="📚 Explore Topics", value="Benefits, risks, anxiety, sleep, tolerance and more.", inline=False)
     embed.add_field(name="🧬 Cannabinoids", value="THC, CBD, CBG, CBN, THCA: sourced chemical facts.", inline=False)
     embed.add_field(name="🔬 Research Library", value="Search scientific articles and trial registrations.", inline=False)
-    embed.set_footer(text="Answers are private • Evidence, not hype • Not medical advice")
+    embed.set_footer(text="Answers are private • Evidence, not hype • Not a medical professional")
     return embed
 
 async def answer(interaction: discord.Interaction, bot: LabBot, kind: str, value: str) -> None:
@@ -84,7 +84,7 @@ class ResearchModal(discord.ui.Modal):
     def __init__(self, bot: LabBot, kind: str):
         if kind == "ask":
             title, label, hint, lower, upper = (
-                "Ask The 420 Lab", "Your cannabis science question",
+                "Ask The Weed Doctor", "Your cannabis science question",
                 "What are the benefits and risks of THC?", 4, 220)
         elif kind == "trials":
             title, label, hint, lower, upper = (
@@ -272,11 +272,29 @@ class LibraryMenu(discord.ui.View):
             view=MemberMenu(self.bot, interaction.user.id, StudyDesignSelect()), ephemeral=True)
 
 class LabPanelView(discord.ui.View):
-    """Stable custom IDs and timeout=None enable restart-safe callbacks."""
+    """Stable legacy component IDs keep posted panels functional across the rebrand."""
     def __init__(self, bot: LabBot):
         super().__init__(timeout=None)
         self.bot = bot
-    @discord.ui.button(label="Ask the Lab", emoji="🧠", style=discord.ButtonStyle.primary,
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Rebrand a legacy default panel when somebody uses it; never overwrite custom titles."""
+        message = interaction.message
+        if (
+            message is not None
+            and self.bot.user is not None
+            and message.author.id == self.bot.user.id
+            and message.embeds
+            and message.embeds[0].title == "🌿 THE 420 LAB | Cannabis Science Desk"
+        ):
+            try:
+                await message.edit(
+                    embed=panel_embed(), view=self,
+                    allowed_mentions=discord.AllowedMentions.none())
+            except discord.HTTPException:
+                log.warning("Unable to refresh a legacy Weed Doctor panel")
+        return True
+    @discord.ui.button(label="Ask the Doctor", emoji="🧠", style=discord.ButtonStyle.primary,
                        custom_id="the420lab:panel:v1:ask", row=0)
     async def ask(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ResearchModal(self.bot, "ask"))
@@ -301,13 +319,13 @@ class LabPanelView(discord.ui.View):
     @discord.ui.button(label="Help & Safety", emoji="ℹ️", style=discord.ButtonStyle.secondary,
                        custom_id="the420lab:panel:v1:help", row=1)
     async def help(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(title="The 420 Lab • How to Use", color=discord.Color.from_rgb(18, 123, 82))
+        embed = discord.Embed(title="The Weed Doctor • How to Use", color=discord.Color.from_rgb(18, 123, 82))
         embed.description = (
             "**Ask:** Type any science question.\n**Topics:** Choose a preset research question.\n"
             "**Cannabinoids:** Explore PubChem chemistry.\n**Research:** Studies, advanced design filters, trials, guides, FDA reports and strain names.\n\n"
             "Your responses are private. If enabled, Gemini receives your question and source excerpts; "
             "do not enter private health details. A paper or trial listing isn't proof of benefit. "
-            "For severe symptoms, contact emergency services.")
+            "For severe symptoms, contact emergency services. This is an educational bot, not a physician.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
         log.error("Lab panel failed: %s", type(error).__name__)

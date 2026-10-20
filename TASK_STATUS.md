@@ -1,4 +1,4 @@
-# Active task: The 420 Lab evidence-first Discord bot
+# Active task: The Weed Doctor (formerly The 420 Lab) evidence-first Discord bot
 
 **CURRENT STATUS (20 October 2026): The planned Phase 2 feature set is implemented on main. Live and unit verification details are in RELEASE_STATUS.md. Earlier notes below are historical and may list work that is now finished.**
 
@@ -85,3 +85,8 @@ Additional abuse controls: added optional LAB_AI_ENABLED=false emergency cutoff 
 ## Ledger continuity release follow-up
 
 Added boot-level SQLite continuity markers, startup diagnostics and /labcontrol and /labhealth visibility. A fresh-interpreter integration test confirms persisted AI pause, lowered Gemini cap and consumed quota remain enforceable when the same database is retained. CI passed all 68 tests; GitHub deployment integration reported Discloud success. Real Discloud filesystem retention cannot be established from currently connected tools and remains unverified. No extra branches or credentials required.
+
+
+## Current active rebrand: The Weed Doctor
+
+User requested rebranding from The 420 Lab to The Weed Doctor. Discord-visible titles, panels, help messages, owner controls, system prompt, Discloud display name and primary documentation were renamed. Four brand-forward command aliases were added while retaining old slash commands and stable persistent panel custom IDs for backward compatibility. Default older posted panels update on their next interaction, without overwriting server-custom titles. The legacy GitHub repo slug and internal module/config identifiers remain for deployment safety. Discord app name and bot username still require an authorized Developer Portal rename; code cannot establish that update.

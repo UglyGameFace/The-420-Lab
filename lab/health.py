@@ -22,7 +22,7 @@ class LabHealth:
         minutes = rem // 60
         used = ", ".join(f"{key}: {self.counts[key]}" for key in sorted(self.counts)) or "none yet"
         return (
-            "**The 420 Lab | Process Health**\n"
+            "**The Weed Doctor | Process Health**\n"
             f"Uptime: {hours}h {minutes}m • Connected servers: {guild_count}\n"
             f"In-memory research cache: {cache_items} entries • AI configured: {ai_enabled}\n"
             f"Research calls this process: {used}\n\n"

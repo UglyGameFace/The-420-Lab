@@ -161,7 +161,7 @@ class ScienceSources:
         if PUBMED_FILTERS[kind]:
             term += " AND " + PUBMED_FILTERS[kind]
         params = {"db": "pubmed", "term": term, "retmode": "json", "retmax": "3",
-                  "sort": "relevance", "tool": "The420Lab"}
+                  "sort": "relevance", "tool": "TheWeedDoctor"}
         if self.api_key:
             params["api_key"] = self.api_key
         result = await self._json(f"{NCBI}/esearch.fcgi", params, ncbi=True)
@@ -170,7 +170,7 @@ class ScienceSources:
         if not ids:
             return []
         params = {"db": "pubmed", "id": ",".join(ids), "rettype": "abstract",
-                  "retmode": "xml", "tool": "The420Lab"}
+                  "retmode": "xml", "tool": "TheWeedDoctor"}
         if self.api_key:
             params["api_key"] = self.api_key
         root = await self._xml(f"{NCBI}/efetch.fcgi", params)

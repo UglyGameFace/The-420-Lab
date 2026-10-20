@@ -27,7 +27,7 @@ def panel(bot) -> discord.Embed:
         f"{name} {used}/{cap}" if used >= 0 else f"{name} unavailable"
         for name, (used, cap) in usage.items())
     embed = discord.Embed(
-        title="🛡️ The 420 Lab | Owner Control Center",
+        title="🛡️ The Weed Doctor | Owner Control Center",
         description=(
             f"**Gemini:** {'Enabled' if enabled else 'Paused / not configured'}\n"
             "**Edit limits or pause AI below.** Only the Discord application owner can make changes. "
@@ -39,7 +39,7 @@ def panel(bot) -> discord.Embed:
     embed.add_field(name="Quota storage continuity",
                     value=quota.continuity_description(), inline=False)
     embed.add_field(name="Important boundary",
-                    value=("These are **The 420 Lab's** limits, not Google's official "
+                    value=("These are **The Weed Doctor's** limits, not Google's official "
                            "billing caps. Values cannot exceed the private hosting ceilings. "
                            "Settings remain saved only while the quota SQLite database is retained."),
                     inline=False)

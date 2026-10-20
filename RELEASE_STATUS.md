@@ -1,4 +1,4 @@
-# The 420 Lab | Release status
+# The Weed Doctor | Release status
 20 October 2026
 
 ## Development milestone
@@ -38,3 +38,8 @@ There are no outstanding implementation items in the originally agreed bounded P
 A release-hardening pass added app-owner Discord quota controls, global caps, SQLite continuity markers and associated regression checks. GitHub Actions run 39507434678 succeeded with 68 tests, including separate-Python-process tests that reopen and enforce saved AI pause state, lowered limits and consumed requests. Discloud marked that commit successful.
 
 Host-specific file retention is **not yet independently verified**. Discloud deployment status doesn't expose private filesystem records. The bot now reports whether it found a quota ledger from a previous launch inside /labcontrol, /labhealth and its startup logs. An empty replacement database is classified as an unverified first launch, not a success. Provider-side spending caps must be controlled separately.
+
+
+## Brand identity transition
+
+The bot's public-facing brand is **The Weed Doctor** (formerly The 420 Lab). Slash command compatibility, stable interaction IDs, and the historical repository slug were preserved. Discloud's display NAME was changed. The Discord application's actual name and bot username require application-owner changes in the Developer Portal. No medical licensure is implied by the brand.

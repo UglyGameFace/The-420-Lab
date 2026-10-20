@@ -1,4 +1,4 @@
-# The 420 Lab 🌿🔬
+# The Weed Doctor 🌿🔬
 
 An independently written, evidence-first Discord bot to educate adults about cannabis, THC, CBD, positive and negative effects, and research limitations. No personal medical advice, regulated goods sales, or purchasing services.
 
@@ -46,7 +46,7 @@ Public API references:
 
 A server manager runs **/labpanel** in the desired text channel to post a public science desk. The bot needs View Channel, Send Messages, Embed Links, and applications.commands. No Administrator permission or Message Content Intent is required. The command enforces **Manage Server** permission at runtime.
 
-The panel stays usable across bot restarts through stable persistent component IDs registered in setup_hook. Any member may press **Ask the Lab**, **Explore Topics**, **Cannabinoids**, **Research Library**, or **Help & Safety**. Topic and molecule pickers, research forms, and registered trial lookup reuse the same three research handlers as the existing slash commands. All query results remain **private** to the member; the public panel does not expose a member's medical questions. A 15-second per-member panel cooldown and the existing shared backend concurrency cap reduce API abuse. Menus timeout after three minutes; members may reopen them from the permanent panel.
+The panel stays usable across bot restarts through stable persistent component IDs registered in setup_hook. Any member may press **Ask the Doctor**, **Explore Topics**, **Cannabinoids**, **Research Library**, or **Help & Safety**. Topic and molecule pickers, research forms, and registered trial lookup reuse the same three research handlers as the existing slash commands. All query results remain **private** to the member; the public panel does not expose a member's medical questions. A 15-second per-member panel cooldown and the existing shared backend concurrency cap reduce API abuse. Menus timeout after three minutes; members may reopen them from the permanent panel.
 
 
 ## Phase 2: Verified public-health guides and research-design labels
@@ -107,7 +107,7 @@ This is quota defense, not a guarantee against every denial-of-service technique
 
 ### Emergency controls
 
-Set `LAB_AI_ENABLED=false` in your private Discloud environment and restart **The 420 Lab** to completely disable Gemini requests while keeping PubMed paper links available. You may optionally set `LAB_ALLOWED_GUILDS` to comma-separated numeric Discord server IDs to restrict all quota-gated research operations to those servers. When unset, permitted guilds still share the bot-wide budget. Both controls are off/on configuration switches, not a substitute for provider-side spend caps or key rotation.
+Set `LAB_AI_ENABLED=false` in your private Discloud environment and restart **The Weed Doctor** to completely disable Gemini requests while keeping PubMed paper links available. You may optionally set `LAB_ALLOWED_GUILDS` to comma-separated numeric Discord server IDs to restrict all quota-gated research operations to those servers. When unset, permitted guilds still share the bot-wide budget. Both controls are off/on configuration switches, not a substitute for provider-side spend caps or key rotation.
 
 
 ### Discord-native app-owner quota controls
@@ -127,3 +127,12 @@ Use the private /labcontrol owner panel or /labhealth to see **Quota storage con
 - **Prior quota ledger found after a code revision:** saved metadata survived a source-code version change.
 
 This check does not prove backup durability or multi-host shared storage. The quota SQLite file is excluded from Git uploads, and provider billing limits remain separate.
+
+
+## Branding update: The Weed Doctor
+
+The product is now **The Weed Doctor**, formerly **The 420 Lab**. The legacy GitHub repository address, internal Python module names, environment-variable prefixes, old `/lab*` slash command aliases, and `the420lab:panel:v1:*` Discord button IDs stay unchanged for deployment and interaction compatibility. The four brand-forward aliases are `/doctorpanel`, `/doctorpanelupdate`, `/doctorcontrol`, and `/doctorhealth`.
+
+The default public panel and owner dashboard now use The Weed Doctor. Existing default public panel messages are refreshed when their buttons are clicked (where the bot can edit its own messages). Custom-branded panels are not overwritten; a server manager can update one with `/doctorpanelupdate` and the message link. The term *Doctor* is branding, not a claim of being a medical professional.
+
+Discord's application name and bot account username must also be changed by the application owner in the Discord Developer Portal to rename the account itself. These account-level names do not change from a GitHub code deployment.

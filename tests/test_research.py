@@ -356,7 +356,7 @@ class DiscordRegistryTests(unittest.TestCase):
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate", "labhealth", "papers", "labcontrol"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -472,6 +472,24 @@ class PublicPanelTests(unittest.TestCase):
         self.assertIn("Advanced Evidence Search",
                       [item.label for item in LibraryMenu(bot, 123).children])
         self.assertEqual(len(StudyDesignSelect().options), 4)
+
+    def test_weed_doctor_default_panel_and_legacy_component_ids(self):
+        from lab.bot import bot
+        from lab.panel import LabPanelView, panel_embed
+        embed = panel_embed()
+        self.assertEqual(embed.title, "🌿 THE WEED DOCTOR | Cannabis Science Desk")
+        self.assertIn("not a medical professional", embed.footer.text.lower())
+        view = LabPanelView(bot)
+        self.assertTrue(view.is_persistent())
+        self.assertIn("Ask the Doctor", [getattr(child, "label", "") for child in view.children])
+        self.assertTrue(all(child.custom_id.startswith("the420lab:panel:v1:")
+                            for child in view.children))
+
+    def test_branded_command_aliases_respect_permissions(self):
+        from lab.bot import bot
+        for name in ("doctorpanel", "doctorpanelupdate", "doctorhealth"):
+            self.assertTrue(bot.tree.get_command(name).default_permissions.manage_guild)
+        self.assertTrue(bot.tree.get_command("doctorcontrol").default_permissions.administrator)
 
     def test_panel_cooldown_is_bounded(self):
         from lab.bot import bot

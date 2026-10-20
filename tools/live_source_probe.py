@@ -14,7 +14,7 @@ async def probe():
     failures = []
     async with aiohttp.ClientSession(
         timeout=timeout,
-        headers={"User-Agent": "The420Lab-public-smoke/1.0 (github.com/UglyGameFace/The-420-Lab)"}
+        headers={"User-Agent": "TheWeedDoctor-public-smoke/1.0 (github.com/UglyGameFace/The-420-Lab)"}
     ) as session:
         client = ScienceSources(session)
         checks = (

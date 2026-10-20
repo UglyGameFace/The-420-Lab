@@ -39,7 +39,7 @@ class LabBot(commands.Bot):
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=18),
-            headers={"User-Agent": "The420Lab/0.1 (Discord cannabis research bot)"})
+            headers={"User-Agent": "TheWeedDoctor/0.1 (Discord cannabis research bot)"})
         self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""),
                                      os.getenv("OPENFDA_API_KEY", ""), quota=self.quota)
         key = os.getenv("GEMINI_API_KEY", "")
@@ -78,17 +78,17 @@ class LabBot(commands.Bot):
             allowed = {part.strip() for part in allowlist.split(",") if part.strip()}
             if not all(item.isdigit() for item in allowed):
                 await interaction.response.send_message(
-                    "The Lab's server access configuration is invalid.", ephemeral=True)
+                    "The Weed Doctor's server access configuration is invalid.", ephemeral=True)
                 return False
             if str(interaction.guild_id) not in allowed:
                 await interaction.response.send_message(
-                    "The Lab's research features are not enabled for this server.",
+                    "The Weed Doctor's research features are not enabled for this server.",
                     ephemeral=True)
                 return False
         try:
             self.quota.admit_member(interaction.user.id, interaction.guild_id)
         except QuotaExceeded as exc:
-            message = (f"The Lab's {exc.kind} usage safety limit was reached. "
+            message = (f"The Weed Doctor's {exc.kind} usage safety limit was reached. "
                        f"Try again in about {exc.retry_after} seconds.")
             if interaction.response.is_done():
                 await interaction.followup.send(message, ephemeral=True)
@@ -131,7 +131,7 @@ class LabBot(commands.Bot):
                         f"{item.url}\n\nChemistry does not establish health benefits or safe dosing.")
             return "PubChem did not find a matching record."
         except QuotaExceeded:
-            return "The Lab has reached its public research request allowance. Try later."
+            return "The Weed Doctor has reached its public research request allowance. Try later."
         except (SourceError, ValueError):
             return "PubChem is temporarily unavailable for that compound."
 
@@ -148,7 +148,7 @@ class LabBot(commands.Bot):
                 message = "No matching registered studies found."
             return clip_discord(message + "\n\nTrial registration does not prove a treatment works.")
         except QuotaExceeded:
-            return "The Lab has reached its public research request allowance. Try later."
+            return "The Weed Doctor has reached its public research request allowance. Try later."
         except SourceError:
             return "ClinicalTrials.gov is currently unavailable."
 
@@ -160,7 +160,7 @@ class LabBot(commands.Bot):
                 data = await self.science.fda_reports(product)
             return clip_discord(report_message(data))
         except QuotaExceeded:
-            return "The Lab has reached its public research request allowance. Try later."
+            return "The Weed Doctor has reached its public research request allowance. Try later."
         except ValueError:
             return "Choose a supported FDA-approved medicine from the menu."
         except SourceError:
@@ -189,7 +189,7 @@ class LabBot(commands.Bot):
                 assert self.science is not None
                 studies = await self.science.pubmed(topic, kind)
         except QuotaExceeded:
-            return "The Lab has reached its public research request allowance. Try later."
+            return "The Weed Doctor has reached its public research request allowance. Try later."
         except (SourceError, ValueError):
             return "Unable to retrieve indexed PubMed results with this filter right now."
         if not studies:
@@ -353,7 +353,7 @@ async def labpanel(interaction: discord.Interaction, title: str | None = None,
             embed=panel_embed(title, intro, theme), view=LabPanelView(bot),
             allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
-        logger.exception("Unable to publish Lab panel")
+        logger.exception("Unable to publish Weed Doctor panel")
         await interaction.followup.send("Could not post the panel. Check my channel permissions.",
                                         ephemeral=True)
         return
@@ -373,7 +373,7 @@ def extract_panel_message_id(value: str, guild_id: int, channel_id: int) -> int 
     return None
 
 
-@bot.tree.command(name="labpanelupdate", description="Restyle an existing Lab panel message in this channel")
+@bot.tree.command(name="labpanelupdate", description="Restyle an existing Weed Doctor panel message in this channel")
 @app_commands.guild_only()
 @app_commands.default_permissions(manage_guild=True)
 @app_commands.checks.has_permissions(manage_guild=True)
@@ -398,7 +398,7 @@ async def labpanelupdate(interaction: discord.Interaction, message_link: str,
     try:
         message = await interaction.channel.fetch_message(message_id)
         if bot.user is None or message.author.id != bot.user.id:
-            await interaction.followup.send("That message wasn't posted by The 420 Lab.", ephemeral=True)
+            await interaction.followup.send("That message wasn't posted by The Weed Doctor.", ephemeral=True)
             return
         ids = [
             child.custom_id
@@ -406,13 +406,13 @@ async def labpanelupdate(interaction: discord.Interaction, message_link: str,
             if getattr(child, "custom_id", None)
         ]
         if not any(cid.startswith("the420lab:panel:v1:") for cid in ids):
-            await interaction.followup.send("That isn't a The 420 Lab panel message.", ephemeral=True)
+            await interaction.followup.send("That isn't a The Weed Doctor panel message.", ephemeral=True)
             return
         await message.edit(
             embed=panel_embed(title, intro, theme),
             view=LabPanelView(bot), allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
-        logger.exception("Unable to update Lab panel message")
+        logger.exception("Unable to update Weed Doctor panel message")
         await interaction.followup.send(
             "Can't edit that panel. I may need Read Message History and Send Messages here.",
             ephemeral=True)
@@ -428,7 +428,7 @@ async def labcontrol(interaction: discord.Interaction):
     """Owner only. Administrator visibility does NOT grant runtime access."""
     if not await bot.is_owner(interaction.user):
         await interaction.response.send_message(
-            "Only The 420 Lab's Discord application owner can open this control panel.",
+            "Only The Weed Doctor's Discord application owner can open this control panel.",
             ephemeral=True)
         return
     try:
@@ -443,7 +443,7 @@ async def labcontrol(interaction: discord.Interaction):
         allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="labhealth", description="Show The 420 Lab's process status (server managers)")
+@bot.tree.command(name="labhealth", description="Show The Weed Doctor's process status (server managers)")
 @app_commands.guild_only()
 @app_commands.default_permissions(manage_guild=True)
 @app_commands.checks.has_permissions(manage_guild=True)
@@ -457,6 +457,56 @@ async def labhealth(interaction: discord.Interaction):
     report += "\n**Quota storage:** " + bot.quota.continuity_description()
     await interaction.response.send_message(
         report, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
+# Brand-forward aliases. Old /lab* commands and legacy persistent IDs remain active.
+@bot.tree.command(name="doctorpanel", description="Publish The Weed Doctor public research panel")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(
+    title="Optional panel title", intro="Optional short introduction",
+    theme="Panel accent color", preview="Show only yourself before posting")
+@app_commands.choices(theme=[
+    app_commands.Choice(name=name.capitalize(), value=name) for name in PANEL_THEMES
+])
+async def doctorpanel(interaction: discord.Interaction, title: str | None = None,
+                      intro: str | None = None, theme: str = "forest",
+                      preview: bool = False):
+    await labpanel.callback(interaction, title=title, intro=intro, theme=theme, preview=preview)
+
+
+@bot.tree.command(name="doctorpanelupdate", description="Edit a posted Weed Doctor research panel")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(
+    message_link="Panel message URL or ID in this channel",
+    title="Updated title", intro="Updated introduction", theme="Accent color")
+@app_commands.choices(theme=[
+    app_commands.Choice(name=name.capitalize(), value=name) for name in PANEL_THEMES
+])
+async def doctorpanelupdate(interaction: discord.Interaction, message_link: str,
+                            title: str | None = None, intro: str | None = None,
+                            theme: str = "forest"):
+    await labpanelupdate.callback(
+        interaction, message_link=message_link, title=title, intro=intro, theme=theme)
+
+
+@bot.tree.command(name="doctorcontrol", description="Weed Doctor app-owner AI and safety limits")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+async def doctorcontrol(interaction: discord.Interaction):
+    # The underlying command verifies actual app ownership, not merely administrator status.
+    await labcontrol.callback(interaction)
+
+
+@bot.tree.command(name="doctorhealth", description="Weed Doctor server-manager process health")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+async def doctorhealth(interaction: discord.Interaction):
+    await labhealth.callback(interaction)
 
 
 @bot.tree.error
