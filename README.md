@@ -67,3 +67,26 @@ OpenFDA adverse-event analysis, licensed strain information and advanced per-ser
 - The API counts **reaction terms in product-name-matching reports**. These are not side-effect incidence rates. Reports can contain several medicines and reaction terms, can be duplicates, and have not necessarily been confirmed or causally attributed. No relative comparisons, percentages, safety rankings, case histories or individual report data.
 - No API key is needed for low-volume use. Optional private **OPENFDA_API_KEY** raises quotas. A bounded cache lasts six hours per product. Do not store keys in GitHub.
 - Sources: https://open.fda.gov/apis/drug/event/ and https://www.fda.gov/safety/fda-adverse-event-monitoring-system-aems . See FDA disclaimers before interpreting any report.
+
+
+## Advanced research, server branding and monitoring
+
+The following features extend the original public panel. Existing root buttons remain persistent; there is no need to republish the panel for new Research Library options.
+
+| Feature | Discord action | Notes |
+|---|---|---|
+| Historical strain names | /strain | Approx. 9,500 catalog names from a **2017** MIT dataset, attribution in ATTRIBUTIONS.md. No potency/effect claims |
+| Advanced PubMed filters | /papers | Filter by PubMed-indexed systematic reviews, RCTs, observational studies or all designs; type does not prove study quality |
+| Panel publish/preview | /labpanel | Optional title, intro, theme (forest/mint/violet/slate), and preview; Manage Server required |
+| Edit an existing panel | /labpanelupdate | Paste a panel's Copy Message Link in the **same channel**, specify replacement title, intro, theme; Manage Server required; bot needs Read Message History to fetch it |
+| Owner-facing process health | /labhealth | Private uptime, guild count, cache size and aggregate call counts; no member IDs or questions retained |
+| FDA safety reporting | /fdareports | Preset FDA-approved cannabinoid medicines, reporting frequencies are NOT risk estimates |
+| Reviewed public references | /scienceguide | NIH/NCCIH, CDC and FDA curated guidance |
+
+The panel's appearance is stored as its Discord embed. Each server/channel can have different messages and colors without a new database, and existing buttons survive restarts. Updating a panel does not change feature access permissions; member answers remain ephemeral.
+
+**Monitoring:** The bot emits a privacy-safe health heartbeat roughly every 15 minutes. GitHub Actions includes a scheduled, weekly and manually runnable Live public-source smoke workflow that checks PubMed, PubChem, ClinicalTrials.gov and openFDA without bot tokens or Gemini credentials. Workflow success indicates those public interfaces returned parsable responses at check time, NOT constant uptime or medical accuracy.
+
+**Science limitations:** No automated output is a formal GRADE assessment or substitute for reading and critically evaluating full studies. Older catalog strain labels do not predict effects. FDA adverse-event submission counts are not causal or incidence estimates. The optional Gemini model may be wrong; verified source links should be read and users should speak with qualified clinicians about individual care.
+
+**Deployment:** Only DISCORD_TOKEN is essential. GEMINI_API_KEY is optional for synthesized answers, and NCBI_API_KEY and OPENFDA_API_KEY are optional for higher rate limits. Never commit secrets. The packaged strain-name JSON is bundled with the bot and does not require an external API or extra database.
