@@ -104,3 +104,7 @@ The bot uses a shared, fail-closed quota guard:
 - Rejected attempts are not queued for outbound paid calls, and reaching the Gemini cap keeps research paper links available when PubMed quota permits.
 
 This is quota defense, not a guarantee against every denial-of-service technique. Bots connected to many servers or with a shared deployment behind different processes need centralized rate governance.
+
+### Emergency controls
+
+Set `LAB_AI_ENABLED=false` in your private Discloud environment and restart **The 420 Lab** to completely disable Gemini requests while keeping PubMed paper links available. You may optionally set `LAB_ALLOWED_GUILDS` to comma-separated numeric Discord server IDs to restrict all quota-gated research operations to those servers. When unset, permitted guilds still share the bot-wide budget. Both controls are off/on configuration switches, not a substitute for provider-side spend caps or key rotation.

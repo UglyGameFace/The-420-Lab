@@ -77,3 +77,5 @@ Implemented an openFDA reporting explorer for only FDA-approved cannabinoid medi
 ## Abuse and budget hardening
 
 Reviewed request paths after the user's concern that alternate accounts could burn paid AI tokens. Found independent slash versus panel cooldowns, no per-guild limits and no bot-wide Gemini allowance. Added a shared interaction admission guard, anonymous transactional global budgets in SQLite, per-user/guild process limits and provider-specific pre-flight caps. The quota ledger stores no user IDs or question content. Source queries and Gemini calls fail closed if quota storage is unavailable. These controls require live deployment and testing; filesystem persistence cannot be assumed after Discloud redeploys. Provider-side caps and key restrictions remain independently important. See README for settings.
+
+Additional abuse controls: added optional LAB_AI_ENABLED=false emergency cutoff and LAB_ALLOWED_GUILDS comma-separated allowlist to restrict costly research to approved servers. No guilds are hard-coded by default, preserving public multi-server use.

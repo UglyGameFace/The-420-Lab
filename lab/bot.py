@@ -41,8 +41,9 @@ class LabBot(commands.Bot):
         self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""),
                                      os.getenv("OPENFDA_API_KEY", ""), quota=self.quota)
         key = os.getenv("GEMINI_API_KEY", "")
+        ai_enabled = os.getenv("LAB_AI_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
         ai = GeminiAnswer(self.http_session, key, os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
-                          quota=self.quota) if key else None
+                          quota=self.quota) if key and ai_enabled else None
         self.assistant = ResearchAssistant(self.science, ai)
         # Register the persistent panel before syncing slash commands.
         self.add_view(LabPanelView(self))
@@ -71,6 +72,18 @@ class LabBot(commands.Bot):
 
     async def admit_interaction(self, interaction: discord.Interaction) -> bool:
         """Central abuse check, shared by expensive slash commands and panel forms."""
+        allowlist = os.getenv("LAB_ALLOWED_GUILDS", "").strip()
+        if allowlist:
+            allowed = {part.strip() for part in allowlist.split(",") if part.strip()}
+            if not all(item.isdigit() for item in allowed):
+                await interaction.response.send_message(
+                    "The Lab's server access configuration is invalid.", ephemeral=True)
+                return False
+            if str(interaction.guild_id) not in allowed:
+                await interaction.response.send_message(
+                    "The Lab's research features are not enabled for this server.",
+                    ephemeral=True)
+                return False
         try:
             self.quota.admit_member(interaction.user.id, interaction.guild_id)
         except QuotaExceeded as exc:
