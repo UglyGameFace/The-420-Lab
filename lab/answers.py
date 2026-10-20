@@ -63,6 +63,8 @@ class GeminiAnswer:
                 raise SourceError("No AI answer")
             answer = re.sub(r"@(everyone|here)", lambda m: "@\u200b" + m.group(1),
                             answer, flags=re.IGNORECASE)
+            # Model-generated links are unverified; only PMID-based URLs are displayed.
+            answer = re.sub(r"https?://\\S+", "[unverified link omitted]", answer, flags=re.IGNORECASE)
             return answer[:1000]
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, IndexError, TypeError) as exc:
             raise SourceError("AI temporarily unavailable") from exc
