@@ -6,7 +6,8 @@ import re
 import aiohttp
 from .sources import ScienceSources, SourceError, Study
 
-DISCLAIMER = "Educational information, not personal medical advice. Research relevance does not prove a benefit or cause."
+DISCLAIMER = ("Educational, not medical advice. A relevant paper does not prove a benefit or cause. "
+              "Do not share private health details; AI-enabled questions and research excerpts go to Gemini.")
 
 SYSTEM_INSTRUCTION = (
     "You are The 420 Lab, a neutral cannabis science educator for adults. "
