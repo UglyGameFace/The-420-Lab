@@ -53,3 +53,14 @@ The user confirmed all three research commands work in Discord. Added a public, 
 ## Follow-up: new /labpanel command not visible (2026-10-20)
 
 The user sees the three previous research commands but not the panel publishing slash command. The code registers four commands. Root issue identified in command-sync scope: when DISCORD_GUILD_ID was set, startup synchronized *only* that guild and skipped global synchronization, risking stale commands in other guilds. The /labpanel command also has Discord's default Manage Server visibility restriction, so non-managers cannot see it; its server-side permission guard is retained. Changed sync behavior to always publish global commands then refresh an optionally configured guild and log/verify each returned command name. Added regression tests for global+guild, global-only, and missing-command detection. Validate GitHub Actions and Discloud deployment, then verify /labpanel is visible to an account with Manage Server permission and post/test the persistent panel. Live visibility still unconfirmed.
+
+
+## Phase 2 science-quality slice: 2026-10-20
+
+Implemented scienceguide slash command plus curated NIH/NCCIH, CDC and FDA official reference links. The existing public panel's Research Library menu now offers Official NIH / CDC / FDA Guides without changing persistent root button identifiers or requiring reposting.
+
+PubMed answers display publication year and PubMed-indexed study design metadata when available. They explicitly warn that indexing does not establish evidence quality, clinical benefits or causation; AI instructions now reflect this restriction.
+
+GitHub Actions run 39499656701 passed 26 tests and syntax checks, including guide source allowlists, the picker and publication metadata. Subsequent documentation-only updates need their own Discloud status verification. User has not yet tested the new scienceguide or expanded Library menu in Discord.
+
+Future slices: FDA adverse-event reporting analysis with reporting-bias safeguards, additional study-methodology context, licensed strain database evaluation, optional per-server panel controls. Do not claim these are implemented. No new branches were created.
