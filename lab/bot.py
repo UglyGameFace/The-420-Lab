@@ -16,6 +16,7 @@ from .panel import LabPanelView, panel_embed, PANEL_THEMES
 from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
+from .health import LabHealth
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,8 @@ class LabBot(commands.Bot):
         self.assistant = None
         self.limiter = asyncio.Semaphore(3)
         self._panel_access = OrderedDict()
+        self.health = LabHealth()
+        self._heartbeat_task = None
 
     async def setup_hook(self):
         self.http_session = aiohttp.ClientSession(
@@ -42,6 +45,7 @@ class LabBot(commands.Bot):
         self.add_view(LabPanelView(self))
         await self.sync_commands()
         logger.info("AI configured: %s", bool(ai))
+        self._heartbeat_task = asyncio.create_task(self._health_heartbeat(), name="lab-heartbeat")
 
     async def sync_commands(self):
         """Publish globally for all servers and refresh the optional test guild."""
@@ -75,6 +79,7 @@ class LabBot(commands.Bot):
         return 0
 
     async def research_answer(self, question: str) -> str:
+        self.health.record("research")
         try:
             async with self.limiter:
                 assert self.assistant is not None
@@ -84,6 +89,7 @@ class LabBot(commands.Bot):
             return "Research lookup failed. Please try again; I won't guess about health effects."
 
     async def compound_answer(self, name: str) -> str:
+        self.health.record("compound")
         try:
             async with self.limiter:
                 assert self.science is not None
@@ -97,6 +103,7 @@ class LabBot(commands.Bot):
             return "PubChem is temporarily unavailable for that compound."
 
     async def trials_answer(self, topic: str) -> str:
+        self.health.record("trials")
         try:
             async with self.limiter:
                 assert self.science is not None
@@ -111,6 +118,7 @@ class LabBot(commands.Bot):
             return "ClinicalTrials.gov is currently unavailable."
 
     async def fda_answer(self, product: str) -> str:
+        self.health.record("fda")
         try:
             async with self.limiter:
                 assert self.science is not None
@@ -122,11 +130,29 @@ class LabBot(commands.Bot):
             return ("openFDA safety-report data is temporarily unavailable. "
                     "These reports do not establish causation or side-effect rates.")
 
+    async def _health_heartbeat(self):
+        try:
+            await self.wait_until_ready()
+            while not self.is_closed():
+                cache_items = len(self.science._cache) if self.science else 0
+                logger.info(
+                    "lab_health uptime_s=%d guilds=%d cache_items=%d total_queries=%d",
+                    self.health.uptime_seconds, len(self.guilds), cache_items,
+                    sum(self.health.counts.values()))
+                await asyncio.sleep(900)
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("Lab process heartbeat failed")
+
     async def on_ready(self):
         # Startup diagnostic; never log tokens or user questions.
         logger.info("Discord gateway ready: bot=%s guild_count=%d", self.user, len(self.guilds))
 
     async def close(self):
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            await asyncio.gather(self._heartbeat_task, return_exceptions=True)
         try:
             if self.http_session:
                 await self.http_session.close()
@@ -171,6 +197,7 @@ async def trials(interaction: discord.Interaction, topic: app_commands.Range[str
     app_commands.Choice(name=guide.title, value=key) for key, guide in GUIDES.items()
 ])
 async def scienceguide(interaction: discord.Interaction, topic: str):
+    bot.health.record("guides")
     await interaction.response.send_message(
         guide_message(topic), ephemeral=True,
         allowed_mentions=discord.AllowedMentions.none())
@@ -192,6 +219,7 @@ async def fdareports(interaction: discord.Interaction, medicine: str):
 @app_commands.describe(name="Strain or cultivar name, not an effect prediction")
 @app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
 async def strain(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
+    bot.health.record("strain")
     await interaction.response.send_message(
         strain_result_text(name), ephemeral=True,
         allowed_mentions=discord.AllowedMentions.none())
@@ -213,6 +241,7 @@ async def labpanel(interaction: discord.Interaction, title: str | None = None,
                    intro: str | None = None, theme: str = "forest",
                    preview: bool = False):
     """Only server managers may publish a panel. Members may use its buttons."""
+    bot.health.record("panel")
     if interaction.guild is None or interaction.channel is None:
         await interaction.response.send_message("Publish this panel in a server channel.", ephemeral=True)
         return
@@ -297,6 +326,18 @@ async def labpanelupdate(interaction: discord.Interaction, message_link: str,
         return
     await interaction.followup.send(
         "Panel style updated. All existing buttons remain usable.", ephemeral=True)
+
+
+@bot.tree.command(name="labhealth", description="Show The 420 Lab's process status (server managers)")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+async def labhealth(interaction: discord.Interaction):
+    report = bot.health.report(
+        len(bot.guilds), len(bot.science._cache) if bot.science else 0,
+        ai_enabled=bool(bot.assistant and bot.assistant.ai))
+    await interaction.response.send_message(
+        report, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.error
