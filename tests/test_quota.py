@@ -111,6 +111,29 @@ class ProtectedNetworkTests(unittest.IsolatedAsyncioTestCase):
                 "Is THC safe?", [Study("123", "Title", "Journal", "Uncertain result")])
         session.post.assert_not_called()
 
+    async def test_allowlisted_server_is_the_only_one_charged(self):
+        from lab.bot import bot
+        user = SimpleNamespace(id=111)
+        response = SimpleNamespace(is_done=lambda: False, send_message=AsyncMock())
+        bad = SimpleNamespace(user=user, guild_id=902, response=response)
+        approved = SimpleNamespace(user=user, guild_id=901, response=response)
+        with patch.dict(os.environ, {"LAB_ALLOWED_GUILDS": "901"}):
+            with patch.object(bot.quota, "admit_member") as admitted:
+                self.assertFalse(await bot.admit_interaction(bad))
+                admitted.assert_not_called()
+                self.assertTrue(await bot.admit_interaction(approved))
+                admitted.assert_called_once_with(111, 901)
+
+    async def test_invalid_allowlist_fails_closed(self):
+        from lab.bot import bot
+        response = SimpleNamespace(is_done=lambda: False, send_message=AsyncMock())
+        request = SimpleNamespace(user=SimpleNamespace(id=111), guild_id=901,
+                                  response=response)
+        with patch.dict(os.environ, {"LAB_ALLOWED_GUILDS": "901,NOT-AN-ID"}):
+            with patch.object(bot.quota, "admit_member") as admitted:
+                self.assertFalse(await bot.admit_interaction(request))
+                admitted.assert_not_called()
+
     async def test_member_block_is_ephemeral(self):
         from lab.bot import bot
         user = SimpleNamespace(id=111)
