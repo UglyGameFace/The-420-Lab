@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import discord
 from .sources import COMPOUNDS
 from .guidance import GUIDES, guide_message
+from .fda import FDA_PRODUCTS
 if TYPE_CHECKING:
     from .bot import LabBot
 log = logging.getLogger(__name__)
@@ -49,6 +50,8 @@ async def answer(interaction: discord.Interaction, bot: LabBot, kind: str, value
         content = await bot.compound_answer(value)
     elif kind == "trials":
         content = await bot.trials_answer(value)
+    elif kind == "fda":
+        content = await bot.fda_answer(value)
     else:
         content = "Unsupported research request."
     await interaction.followup.send(content, allowed_mentions=discord.AllowedMentions.none())
@@ -122,6 +125,17 @@ class OfficialGuideSelect(discord.ui.Select):
             allowed_mentions=discord.AllowedMentions.none())
 
 
+class FDAProductSelect(discord.ui.Select):
+    def __init__(self):
+        super().__init__(
+            placeholder="Select an FDA-approved medicine…", min_values=1, max_values=1,
+            options=[discord.SelectOption(label=label, value=key)
+                     for key, label in FDA_PRODUCTS.items()])
+
+    async def callback(self, interaction: discord.Interaction):
+        await answer(interaction, self.view.bot, "fda", self.values[0])
+
+
 class MemberMenu(discord.ui.View):
     def __init__(self, bot: LabBot, owner_id: int, item: discord.ui.Select):
         super().__init__(timeout=180)
@@ -156,6 +170,15 @@ class LibraryMenu(discord.ui.View):
             "**Official health guidance:** choose a reviewed topic and read the original sources.",
             view=MemberMenu(self.bot, interaction.user.id, OfficialGuideSelect()), ephemeral=True)
 
+    @discord.ui.button(label="FDA Safety Reports", emoji="⚠️",
+                       style=discord.ButtonStyle.secondary)
+    async def fda_reports(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "**FDA reporting data, not side-effect probabilities.** "
+            "Select an FDA-approved cannabinoid medicine to see reported reaction terms. "
+            "Reports can include other drugs, duplicates, and unverified information.",
+            view=MemberMenu(self.bot, interaction.user.id, FDAProductSelect()), ephemeral=True)
+
 class LabPanelView(discord.ui.View):
     """Stable custom IDs and timeout=None enable restart-safe callbacks."""
     def __init__(self, bot: LabBot):
@@ -181,7 +204,7 @@ class LabPanelView(discord.ui.View):
                        custom_id="the420lab:panel:v1:library", row=1)
     async def library(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
-            "**Research Library:** PubMed articles, registered trials and official health guidance.",
+            "**Research Library:** PubMed articles, clinical trials, official guidance, and FDA safety reports.",
             view=LibraryMenu(self.bot, interaction.user.id), ephemeral=True)
     @discord.ui.button(label="Help & Safety", emoji="ℹ️", style=discord.ButtonStyle.secondary,
                        custom_id="the420lab:panel:v1:help", row=1)
@@ -189,7 +212,7 @@ class LabPanelView(discord.ui.View):
         embed = discord.Embed(title="The 420 Lab • How to Use", color=discord.Color.from_rgb(18, 123, 82))
         embed.description = (
             "**Ask:** Type any science question.\n**Topics:** Choose a preset research question.\n"
-            "**Cannabinoids:** Explore PubChem chemistry.\n**Research:** Search studies, trials and official agency guides.\n\n"
+            "**Cannabinoids:** Explore PubChem chemistry.\n**Research:** Search studies, trials, agency guides and FDA reports (not risk estimates).\n\n"
             "Your responses are private. If enabled, Gemini receives your question and source excerpts; "
             "do not enter private health details. A paper or trial listing isn't proof of benefit. "
             "For severe symptoms, contact emergency services.")

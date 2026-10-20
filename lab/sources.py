@@ -9,6 +9,7 @@ import time
 from urllib.parse import quote
 import xml.etree.ElementTree as ET
 import aiohttp
+from .fda import FDA_PRODUCTS, FDA_ENDPOINT, parse_terms
 
 NCBI = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 PUBCHEM = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
@@ -66,9 +67,10 @@ class Trial:
 class ScienceSources:
     """One session per process, with bounded cache and NIH rate pacing."""
 
-    def __init__(self, session: aiohttp.ClientSession, api_key: str = ""):
+    def __init__(self, session: aiohttp.ClientSession, api_key: str = "", openfda_key: str = ""):
         self.session = session
         self.api_key = api_key
+        self.openfda_key = openfda_key
         self._cache: OrderedDict[tuple, tuple[float, object]] = OrderedDict()
         self._ncbi_lock = asyncio.Lock()
         self._next_ncbi = 0.0
@@ -104,13 +106,13 @@ class ScienceSources:
         except (aiohttp.ClientError, asyncio.TimeoutError, ET.ParseError) as exc:
             raise SourceError("PubMed detail unavailable") from exc
 
-    async def _cached(self, key: tuple, factory):
+    async def _cached(self, key: tuple, factory, ttl: int = 900):
         cached = self._cache.get(key)
         if cached and cached[0] > time.monotonic():
             self._cache.move_to_end(key)
             return cached[1]
         result = await factory()
-        self._cache[key] = (time.monotonic() + 900, result)
+        self._cache[key] = (time.monotonic() + ttl, result)
         self._cache.move_to_end(key)
         while len(self._cache) > 256:
             self._cache.popitem(last=False)
@@ -212,3 +214,34 @@ class ScienceSources:
             results.append(Trial(nct, str(ident.get("briefTitle", "Untitled trial"))[:220],
                                  str(section.get("statusModule", {}).get("overallStatus", "Unknown"))))
         return results
+
+
+    async def fda_reports(self, product: str):
+        """Optional-key, cached aggregate report term query; never downloads private case records."""
+        if product not in FDA_PRODUCTS:
+            raise ValueError("Unsupported FDA product")
+        return await self._cached(("fda", product), lambda: self._fda_reports(product), ttl=21600)
+
+    async def _fda_reports(self, product: str):
+        # API terms are fixed by the allowlist: no arbitrary user-generated query syntax.
+        search = f'patient.drug.medicinalproduct:"{product.upper()}"'
+        params = {
+            "search": search,
+            "count": "patient.reaction.reactionmeddrapt.exact",
+            "limit": 5,
+        }
+        if self.openfda_key:
+            params["api_key"] = self.openfda_key
+        # No-match is a normal 404 on the openFDA count endpoint; avoid false failure reports.
+        try:
+            async with self.session.get(FDA_ENDPOINT, params=params) as response:
+                if response.status == 404:
+                    return parse_terms({"results": []}, product)
+                if response.status != 200:
+                    raise SourceError(f"openFDA HTTP {response.status}")
+                data = await response.json(content_type=None)
+            if not isinstance(data, dict):
+                raise SourceError("Invalid openFDA response")
+            return parse_terms(data, product)
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+            raise SourceError("openFDA reporting data unavailable") from exc

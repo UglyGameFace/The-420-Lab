@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 from lab.answers import DISCLAIMER, GeminiAnswer, ResearchAssistant, study_design, study_links
 from lab.sources import ScienceSources, SourceError, Study
+from lab.fda import FDA_PRODUCTS, FDAReportTerms, FDA_ENDPOINT, parse_terms, report_message
 
 
 class DummyResponse:
@@ -215,13 +216,79 @@ class OfficialGuideTests(unittest.TestCase):
         self.assertNotIn("http", guide_message("https://example.com"))
 
 
+
+class FDASafetyReportTests(unittest.IsolatedAsyncioTestCase):
+    async def test_approved_medicine_query_is_exact_and_bounded(self):
+        fake = FakeSession([DummyResponse({
+            "meta": {"last_updated": "2026-07-30"},
+            "results": [{"term": "NAUSEA", "count": 12},
+                        {"term": "FATIGUE", "count": 9}]
+        })])
+        science = ScienceSources(fake)
+        data = await science.fda_reports("epidiolex")
+        self.assertEqual(len(fake.calls), 1)
+        self.assertEqual(fake.calls[0][0], FDA_ENDPOINT)
+        params = fake.calls[0][1]["params"]
+        self.assertEqual(params["search"], 'patient.drug.medicinalproduct:"EPIDIOLEX"')
+        self.assertEqual(params["count"], "patient.reaction.reactionmeddrapt.exact")
+        self.assertEqual(params["limit"], 5)
+        self.assertNotIn("api_key", params)
+        self.assertEqual(data.reactions, (("NAUSEA", 12), ("FATIGUE", 9)))
+        self.assertIn("does NOT prove", report_message(data))
+        self.assertNotIn("%", report_message(data))
+
+    async def test_invalid_search_cannot_reach_provider(self):
+        fake = FakeSession([])
+        with self.assertRaises(ValueError):
+            await ScienceSources(fake).fda_reports("anything OR cancer")
+        self.assertEqual(fake.calls, [])
+
+    async def test_api_key_is_optional_and_not_displayed(self):
+        fake = FakeSession([DummyResponse({"results": [{"term": "FATIGUE", "count": 1}]})])
+        data = await ScienceSources(fake, openfda_key="super-private").fda_reports("marinol")
+        self.assertEqual(fake.calls[0][1]["params"]["api_key"], "super-private")
+        self.assertNotIn("super-private", report_message(data))
+
+    async def test_404_means_no_matching_report_terms(self):
+        fake = FakeSession([DummyResponse(status=404)])
+        data = await ScienceSources(fake).fda_reports("syndros")
+        self.assertEqual(data.reactions, ())
+        self.assertIn("No matching report terms", report_message(data))
+
+    async def test_openfda_error_does_not_fabricate_result(self):
+        fake = FakeSession([DummyResponse(status=429)])
+        with self.assertRaises(SourceError):
+            await ScienceSources(fake).fda_reports("cesamet")
+
+    def test_malformed_and_untrusted_fda_terms_are_ignored(self):
+        payload = {"results": [
+            {"term": "@everyone <https://malicious.example>", "count": 2},
+            {"term": "FATIGUE", "count": -1},
+            {"term": "NAUSEA", "count": 1.5},
+            {"term": "HEADACHE", "count": 3}
+        ]}
+        data = parse_terms(payload, "marinol")
+        answer = report_message(data)
+        self.assertNotIn("@everyone", answer)
+        self.assertNotIn("https://malicious", answer)
+        self.assertNotIn("FATIGUE", answer)
+        self.assertIn("Headache", answer)
+
+    async def test_cache_avoids_repeat_openfda_hits(self):
+        fake = FakeSession([DummyResponse({"results": [{"term": "HEADACHE", "count": 3}]})])
+        science = ScienceSources(fake)
+        self.assertEqual(await science.fda_reports("epidiolex"),
+                         await science.fda_reports("epidiolex"))
+        self.assertEqual(len(fake.calls), 1)
+
+
 class DiscordRegistryTests(unittest.TestCase):
     def test_expected_slash_commands(self):
         if importlib.util.find_spec("discord") is None:
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -285,6 +352,13 @@ class PublicPanelTests(unittest.TestCase):
         menu = LibraryMenu(bot, 123)
         self.assertIn("Official NIH / CDC / FDA Guides", [item.label for item in menu.children])
         self.assertEqual(len(OfficialGuideSelect().options), 6)
+
+    def test_library_shows_fda_safety_reports(self):
+        from lab.bot import bot
+        from lab.panel import LibraryMenu, FDAProductSelect
+        menu = LibraryMenu(bot, 123)
+        self.assertIn("FDA Safety Reports", [item.label for item in menu.children])
+        self.assertEqual(len(FDAProductSelect().options), 4)
 
     def test_panel_cooldown_is_bounded(self):
         from lab.bot import bot

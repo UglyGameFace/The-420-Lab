@@ -58,3 +58,12 @@ The panel stays usable across bot restarts through stable persistent component I
 - Official guidance needs no new API key and doesn't pass a member question to Gemini.
 
 OpenFDA adverse-event analysis, licensed strain information and advanced per-server controls are future slices. Regulatory and public-health guidance may change, so readers should check the linked agency pages.
+
+
+## FDA safety-report explorer (Phase 2)
+
+- Run **/fdareports medicine** or open **Research Library → FDA Safety Reports** from an already-posted public panel. The root panel ID and buttons are unchanged.
+- The app queries aggregate openFDA report terms for four explicitly allowlisted prescription cannabinoid products: Epidiolex, Marinol, Syndros, Cesamet. It does **not** estimate risks for general THC/CBD or retail cannabis.
+- The API counts **reaction terms in product-name-matching reports**. These are not side-effect incidence rates. Reports can contain several medicines and reaction terms, can be duplicates, and have not necessarily been confirmed or causally attributed. No relative comparisons, percentages, safety rankings, case histories or individual report data.
+- No API key is needed for low-volume use. Optional private **OPENFDA_API_KEY** raises quotas. A bounded cache lasts six hours per product. Do not store keys in GitHub.
+- Sources: https://open.fda.gov/apis/drug/event/ and https://www.fda.gov/safety/fda-adverse-event-monitoring-system-aems . See FDA disclaimers before interpreting any report.

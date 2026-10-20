@@ -64,3 +64,8 @@ PubMed answers display publication year and PubMed-indexed study design metadata
 GitHub Actions run 39499656701 passed 26 tests and syntax checks, including guide source allowlists, the picker and publication metadata. Subsequent documentation-only updates need their own Discloud status verification. User has not yet tested the new scienceguide or expanded Library menu in Discord.
 
 Future slices: FDA adverse-event reporting analysis with reporting-bias safeguards, additional study-methodology context, licensed strain database evaluation, optional per-server panel controls. Do not claim these are implemented. No new branches were created.
+
+
+## Phase 2 slice: FDA adverse-event reporting
+
+Implemented an openFDA reporting explorer for only FDA-approved cannabinoid medicines, with choices Epidiolex, Marinol, Syndros and Cesamet. The new /fdareports command and the existing public panel's Research Library menu share the same read-only request handling. Displayed counts are report reaction-term mentions, explicitly not causal incidence or comparative risk. Individual adverse event cases, patient details and unapproved retail cannabis are excluded. Six-hour bounded cache and optional OPENFDA_API_KEY reduce quota use. Added tests for allowlist enforcement, 404/429 handling, sanitization, caching and menu integration. Live API response accuracy and post-deploy menu behavior remain pending verification. Avoid broadening to unsupported side-effect claims or numeric safety scores.

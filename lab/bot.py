@@ -13,6 +13,7 @@ from .sources import COMPOUNDS, ScienceSources, SourceError
 from .answers import GeminiAnswer, ResearchAssistant, clip_discord
 from .panel import LabPanelView, panel_embed
 from .guidance import GUIDES, guide_message
+from .fda import FDA_PRODUCTS, report_message
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,8 @@ class LabBot(commands.Bot):
         self.http_session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=18),
             headers={"User-Agent": "The420Lab/0.1 (Discord cannabis research bot)"})
-        self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""))
+        self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""),
+                                     os.getenv("OPENFDA_API_KEY", ""))
         key = os.getenv("GEMINI_API_KEY", "")
         ai = GeminiAnswer(self.http_session, key, os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")) if key else None
         self.assistant = ResearchAssistant(self.science, ai)
@@ -106,6 +108,18 @@ class LabBot(commands.Bot):
         except SourceError:
             return "ClinicalTrials.gov is currently unavailable."
 
+    async def fda_answer(self, product: str) -> str:
+        try:
+            async with self.limiter:
+                assert self.science is not None
+                data = await self.science.fda_reports(product)
+            return clip_discord(report_message(data))
+        except ValueError:
+            return "Choose a supported FDA-approved medicine from the menu."
+        except SourceError:
+            return ("openFDA safety-report data is temporarily unavailable. "
+                    "These reports do not establish causation or side-effect rates.")
+
     async def on_ready(self):
         # Startup diagnostic; never log tokens or user questions.
         logger.info("Discord gateway ready: bot=%s guild_count=%d", self.user, len(self.guilds))
@@ -158,6 +172,18 @@ async def scienceguide(interaction: discord.Interaction, topic: str):
     await interaction.response.send_message(
         guide_message(topic), ephemeral=True,
         allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="fdareports", description="Explore reported reactions in FDA drug-safety submissions")
+@app_commands.describe(medicine="Choose an FDA-approved cannabinoid medicine")
+@app_commands.choices(medicine=[
+    app_commands.Choice(name=label, value=key) for key, label in FDA_PRODUCTS.items()
+])
+@app_commands.checks.cooldown(1, 25, key=lambda i: (i.guild_id, i.user.id))
+async def fdareports(interaction: discord.Interaction, medicine: str):
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    await interaction.followup.send(await bot.fda_answer(medicine),
+                                    allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="labpanel", description="Post the public interactive cannabis science panel")
