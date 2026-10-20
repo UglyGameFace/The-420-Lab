@@ -117,6 +117,13 @@ class AnswerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("@\u200beveryone", answer)
         self.assertEqual(fake.calls[0][1]["headers"]["x-goog-api-key"], "testkey")
 
+    async def test_unverified_ai_link_is_not_displayed(self):
+        fake = FakeSession([DummyResponse({"candidates": [{"content": {
+            "parts": [{"text": "Check https://unverified.example/bad"}]}}]})])
+        answer = await GeminiAnswer(fake, "testkey").generate("Question?", self.studies)
+        self.assertNotIn("https://unverified.example", answer)
+        self.assertIn("[unverified link omitted]", answer)
+
     async def test_empty_ai_output(self):
         fake = FakeSession([DummyResponse({"candidates": [{"content": {"parts": []}}]})])
         with self.assertRaises(SourceError):
