@@ -47,3 +47,14 @@ Public API references:
 A server manager runs **/labpanel** in the desired text channel to post a public science desk. The bot needs View Channel, Send Messages, Embed Links, and applications.commands. No Administrator permission or Message Content Intent is required. The command enforces **Manage Server** permission at runtime.
 
 The panel stays usable across bot restarts through stable persistent component IDs registered in setup_hook. Any member may press **Ask the Lab**, **Explore Topics**, **Cannabinoids**, **Research Library**, or **Help & Safety**. Topic and molecule pickers, research forms, and registered trial lookup reuse the same three research handlers as the existing slash commands. All query results remain **private** to the member; the public panel does not expose a member's medical questions. A 15-second per-member panel cooldown and the existing shared backend concurrency cap reduce API abuse. Menus timeout after three minutes; members may reopen them from the permanent panel.
+
+
+## Phase 2: Verified public-health guides and research-design labels
+
+- **/scienceguide topic** opens curated public NIH/NCCIH, CDC and FDA guidance. Topics: cannabis basics, general risks, heart, lungs, prescription medicines and CBD products. These links are maintained in the source allowlist, not AI-generated.
+- The existing public panel's **Research Library** menu has **Official NIH / CDC / FDA Guides**. Persistent root buttons have not changed, so an existing posted panel should keep working.
+- PubMed citations now include the year and source-indexed publication type when available. Study design is not an evidence quality score, outcome, or proof of benefit.
+- AI study context includes indexed design metadata but its instructions prohibit inferring certainty based only on an abstract, title, or publication type.
+- Official guidance needs no new API key and doesn't pass a member question to Gemini.
+
+OpenFDA adverse-event analysis, licensed strain information and advanced per-server controls are future slices. Regulatory and public-health guidance may change, so readers should check the linked agency pages.
