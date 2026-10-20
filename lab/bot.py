@@ -49,7 +49,7 @@ class LabBot(commands.Bot):
 bot = LabBot()
 
 
-@bot.tree.command(name="askthc", description="Ask about THC and cannabis using PubMed evidence")
+@bot.tree.command(name="askthc", description="PubMed research; if AI enabled, your question is sent to Gemini")
 @app_commands.describe(question="Ask about effects, benefits, risks, or cannabinoid research")
 @app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
 async def askthc(interaction: discord.Interaction, question: app_commands.Range[str, 4, 220]):
