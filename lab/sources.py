@@ -128,7 +128,13 @@ class ScienceSources:
         words = [word for word in re.findall(r"[a-zA-Z][a-zA-Z-]{2,}", question.lower())
                  if word not in stopwords]
         keywords = list(dict.fromkeys(words))[:4]
-        term = "(cannabis[Title/Abstract] OR cannabinoid*[Title/Abstract] OR tetrahydrocannabinol[Title/Abstract])"
+        # Narrow a CBD-only question to CBD papers rather than defaulting to THC papers.
+        # Comparative THC/CBD questions retain the combined cannabis search.
+        if re.search(r"\b(cbd|cannabidiol)\b", question, re.IGNORECASE) and not re.search(
+                r"\b(thc|tetrahydrocannabinol)\b", question, re.IGNORECASE):
+            term = "(cannabidiol[Title/Abstract] OR CBD[Title/Abstract])"
+        else:
+            term = "(cannabis[Title/Abstract] OR cannabinoid*[Title/Abstract] OR tetrahydrocannabinol[Title/Abstract])"
         if keywords:
             term += " AND (" + " OR ".join(f"{w}[Title/Abstract]" for w in keywords) + ")"
         params = {"db": "pubmed", "term": term, "retmode": "json", "retmax": "3",
