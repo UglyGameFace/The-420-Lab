@@ -10,8 +10,8 @@ import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
-from .sources import COMPOUNDS, ScienceSources, SourceError
-from .answers import GeminiAnswer, ResearchAssistant, clip_discord
+from .sources import COMPOUNDS, PUBMED_FILTERS, ScienceSources, SourceError
+from .answers import GeminiAnswer, ResearchAssistant, clip_discord, study_links
 from .panel import LabPanelView, panel_embed, PANEL_THEMES
 from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS, report_message
@@ -145,6 +145,29 @@ class LabBot(commands.Bot):
         except Exception:
             logger.exception("Lab process heartbeat failed")
 
+    async def papers_answer(self, topic: str, kind: str = "all") -> str:
+        self.health.record("research")
+        try:
+            async with self.limiter:
+                assert self.science is not None
+                studies = await self.science.pubmed(topic, kind)
+        except (SourceError, ValueError):
+            return "Unable to retrieve indexed PubMed results with this filter right now."
+        if not studies:
+            return ("No PubMed results for this study-design filter. "
+                    "Try a broader topic or select All Designs.")
+        label = {
+            "all": "All Designs", "systematic": "Systematic Reviews",
+            "randomized": "Randomized Controlled Trials",
+            "observational": "Observational Studies",
+        }.get(kind, "All Designs")
+        message = (f"**PubMed research | {label}**\n"
+                   f"{study_links(studies)}\n\n"
+                   "The filter reflects PubMed indexing. A study's existence or "
+                   "design alone does not establish study quality, treatment "
+                   "benefit, or medical suitability.")
+        return clip_discord(message)
+
     async def on_ready(self):
         # Startup diagnostic; never log tokens or user questions.
         logger.info("Discord gateway ready: bot=%s guild_count=%d", self.user, len(self.guilds))
@@ -223,6 +246,25 @@ async def strain(interaction: discord.Interaction, name: app_commands.Range[str,
     await interaction.response.send_message(
         strain_result_text(name), ephemeral=True,
         allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="papers", description="Browse PubMed papers by indexed research design")
+@app_commands.describe(topic="Cannabis research question or topic",
+                       study_design="Choose a published study-design filter")
+@app_commands.choices(study_design=[
+    app_commands.Choice(name=label, value=value) for value, label in (
+        ("all", "All Designs"),
+        ("systematic", "Systematic Reviews"),
+        ("randomized", "Randomized Controlled Trials"),
+        ("observational", "Observational Studies"),
+    )
+])
+@app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
+async def papers(interaction: discord.Interaction, topic: app_commands.Range[str, 3, 180],
+                 study_design: str = "all"):
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    await interaction.followup.send(await bot.papers_answer(topic, study_design),
+                                    allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="labpanel", description="Post the public interactive cannabis science panel")
