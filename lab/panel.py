@@ -6,6 +6,7 @@ import discord
 from .sources import COMPOUNDS
 from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS
+from .strains import result_text as strain_result_text
 if TYPE_CHECKING:
     from .bot import LabBot
 log = logging.getLogger(__name__)
@@ -136,6 +137,20 @@ class FDAProductSelect(discord.ui.Select):
         await answer(interaction, self.view.bot, "fda", self.values[0])
 
 
+class StrainQueryModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="Historical Strain Reference", timeout=300)
+        self.search_term = discord.ui.TextInput(
+            label="Search strain names", placeholder="Try: Northern Lights",
+            min_length=2, max_length=60)
+        self.add_item(self.search_term)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            strain_result_text(str(self.search_term.value)), ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none())
+
+
 class MemberMenu(discord.ui.View):
     def __init__(self, bot: LabBot, owner_id: int, item: discord.ui.Select):
         super().__init__(timeout=180)
@@ -179,6 +194,11 @@ class LibraryMenu(discord.ui.View):
             "Reports can include other drugs, duplicates, and unverified information.",
             view=MemberMenu(self.bot, interaction.user.id, FDAProductSelect()), ephemeral=True)
 
+    @discord.ui.button(label="Strain Name Reference", emoji="🌱",
+                       style=discord.ButtonStyle.secondary)
+    async def strain_names(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(StrainQueryModal())
+
 class LabPanelView(discord.ui.View):
     """Stable custom IDs and timeout=None enable restart-safe callbacks."""
     def __init__(self, bot: LabBot):
@@ -204,7 +224,7 @@ class LabPanelView(discord.ui.View):
                        custom_id="the420lab:panel:v1:library", row=1)
     async def library(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
-            "**Research Library:** PubMed articles, clinical trials, official guidance, and FDA safety reports.",
+            "**Research Library:** PubMed research, clinical trials, agency guides, FDA reports and historical strain names.",
             view=LibraryMenu(self.bot, interaction.user.id), ephemeral=True)
     @discord.ui.button(label="Help & Safety", emoji="ℹ️", style=discord.ButtonStyle.secondary,
                        custom_id="the420lab:panel:v1:help", row=1)
@@ -212,7 +232,7 @@ class LabPanelView(discord.ui.View):
         embed = discord.Embed(title="The 420 Lab • How to Use", color=discord.Color.from_rgb(18, 123, 82))
         embed.description = (
             "**Ask:** Type any science question.\n**Topics:** Choose a preset research question.\n"
-            "**Cannabinoids:** Explore PubChem chemistry.\n**Research:** Search studies, trials, agency guides and FDA reports (not risk estimates).\n\n"
+            "**Cannabinoids:** Explore PubChem chemistry.\n**Research:** Studies, trials, official guides, FDA reports and historical strain names.\n\n"
             "Your responses are private. If enabled, Gemini receives your question and source excerpts; "
             "do not enter private health details. A paper or trial listing isn't proof of benefit. "
             "For severe symptoms, contact emergency services.")
