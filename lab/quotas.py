@@ -6,6 +6,7 @@ prioritize preventing quota exhaustion over maximum throughput.
 """
 from __future__ import annotations
 from collections import OrderedDict, deque
+from contextlib import closing
 import os
 from pathlib import Path
 import sqlite3
@@ -56,7 +57,7 @@ class QuotaGate:
         path = Path(self.db_path)
         if str(path.parent) not in ("", "."):
             path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("""CREATE TABLE IF NOT EXISTS budget_counts (
                 scope TEXT NOT NULL,
                 window INTEGER NOT NULL,
@@ -71,7 +72,7 @@ class QuotaGate:
                    cap, seconds - timestamp % seconds)
                   for suffix, seconds, cap in quotas]
         try:
-            with self._connect() as db:
+            with closing(self._connect()) as db, db:
                 db.execute("BEGIN IMMEDIATE")
                 for scope, window, cap, retry in limits:
                     row = db.execute(
@@ -142,7 +143,7 @@ class QuotaGate:
         caps = {"command": self.global_daily, "gemini": self.gemini_daily,
                 "provider": self.api_daily}
         try:
-            with self._connect() as db:
+            with closing(self._connect()) as db:
                 return {name: (
                     (db.execute("SELECT used FROM budget_counts WHERE scope=? AND window=?",
                                 (name + "-daily", window)).fetchone() or (0,))[0], cap)
