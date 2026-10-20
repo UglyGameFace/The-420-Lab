@@ -324,13 +324,39 @@ class HealthTelemetryTests(unittest.TestCase):
         self.assertIn("Data resets on restarts", message)
         self.assertNotIn("@everyone", message)
 
+class PubMedFilterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_design_filter_search_is_explicit(self):
+        fake = FakeSession([DummyResponse({"esearchresult": {"idlist": []}})])
+        science = ScienceSources(fake)
+        self.assertEqual(await science.pubmed("cannabis sleep", "randomized"), [])
+        term = fake.calls[0][1]["params"]["term"]
+        self.assertIn("Randomized Controlled Trial", term)
+        self.assertIn("Publication Type", term)
+
+    async def test_only_allowlisted_publication_types(self):
+        fake = FakeSession([])
+        with self.assertRaises(ValueError):
+            await ScienceSources(fake).pubmed("THC", "anything OR 1=1")
+        self.assertEqual(fake.calls, [])
+
+    async def test_filter_cache_keys_do_not_collide(self):
+        fake = FakeSession([
+            DummyResponse({"esearchresult": {"idlist": []}}),
+            DummyResponse({"esearchresult": {"idlist": []}})])
+        science = ScienceSources(fake)
+        await science.pubmed("sleep", "all")
+        await science.pubmed("sleep", "systematic")
+        await science.pubmed("sleep", "all")
+        self.assertEqual(len(fake.calls), 2)
+
+
 class DiscordRegistryTests(unittest.TestCase):
     def test_expected_slash_commands(self):
         if importlib.util.find_spec("discord") is None:
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate", "labhealth"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate", "labhealth", "papers"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -439,6 +465,13 @@ class PublicPanelTests(unittest.TestCase):
     def test_process_health_requires_manage_server(self):
         from lab.bot import bot
         self.assertTrue(bot.tree.get_command("labhealth").default_permissions.manage_guild)
+
+    def test_study_design_selector_is_accessible(self):
+        from lab.bot import bot
+        from lab.panel import LibraryMenu, StudyDesignSelect
+        self.assertIn("Advanced Evidence Search",
+                      [item.label for item in LibraryMenu(bot, 123).children])
+        self.assertEqual(len(StudyDesignSelect().options), 4)
 
     def test_panel_cooldown_is_bounded(self):
         from lab.bot import bot
