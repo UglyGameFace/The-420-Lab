@@ -38,6 +38,10 @@ class LabBot(commands.Bot):
             await self.tree.sync()
         logger.info("Commands synced; AI configured: %s", bool(ai))
 
+    async def on_ready(self):
+        # Startup diagnostic; never log tokens or user questions.
+        logger.info("Discord gateway ready: bot=%s guild_count=%d", self.user, len(self.guilds))
+
     async def close(self):
         try:
             if self.http_session:
