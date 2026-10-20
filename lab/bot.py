@@ -14,6 +14,7 @@ from .answers import GeminiAnswer, ResearchAssistant, clip_discord
 from .panel import LabPanelView, panel_embed
 from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS, report_message
+from .strains import result_text as strain_result_text
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +185,15 @@ async def fdareports(interaction: discord.Interaction, medicine: str):
     await interaction.response.defer(ephemeral=True, thinking=True)
     await interaction.followup.send(await bot.fda_answer(medicine),
                                     allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="strain", description="Search an attributed historical cannabis strain-name reference")
+@app_commands.describe(name="Strain or cultivar name, not an effect prediction")
+@app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
+async def strain(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
+    await interaction.response.send_message(
+        strain_result_text(name), ephemeral=True,
+        allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="labpanel", description="Post the public interactive cannabis science panel")
