@@ -72,3 +72,8 @@ Future slices: FDA adverse-event reporting analysis with reporting-bias safeguar
 ## Phase 2 slice: FDA adverse-event reporting
 
 Implemented an openFDA reporting explorer for only FDA-approved cannabinoid medicines, with choices Epidiolex, Marinol, Syndros and Cesamet. The new /fdareports command and the existing public panel's Research Library menu share the same read-only request handling. Displayed counts are report reaction-term mentions, explicitly not causal incidence or comparative risk. Individual adverse event cases, patient details and unapproved retail cannabis are excluded. Six-hour bounded cache and optional OPENFDA_API_KEY reduce quota use. Added tests for allowlist enforcement, 404/429 handling, sanitization, caching and menu integration. Live API response accuracy and post-deploy menu behavior remain pending verification. Avoid broadening to unsupported side-effect claims or numeric safety scores.
+
+
+## Abuse and budget hardening
+
+Reviewed request paths after the user's concern that alternate accounts could burn paid AI tokens. Found independent slash versus panel cooldowns, no per-guild limits and no bot-wide Gemini allowance. Added a shared interaction admission guard, anonymous transactional global budgets in SQLite, per-user/guild process limits and provider-specific pre-flight caps. The quota ledger stores no user IDs or question content. Source queries and Gemini calls fail closed if quota storage is unavailable. These controls require live deployment and testing; filesystem persistence cannot be assumed after Discloud redeploys. Provider-side caps and key restrictions remain independently important. See README for settings.

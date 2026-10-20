@@ -10,6 +10,7 @@ from urllib.parse import quote
 import xml.etree.ElementTree as ET
 import aiohttp
 from .fda import FDA_PRODUCTS, FDA_ENDPOINT, parse_terms
+from .quotas import QuotaGate
 
 NCBI = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 PUBCHEM = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
@@ -74,10 +75,12 @@ class Trial:
 class ScienceSources:
     """One session per process, with bounded cache and NIH rate pacing."""
 
-    def __init__(self, session: aiohttp.ClientSession, api_key: str = "", openfda_key: str = ""):
+    def __init__(self, session: aiohttp.ClientSession, api_key: str = "",
+                 openfda_key: str = "", quota: QuotaGate | None = None):
         self.session = session
         self.api_key = api_key
         self.openfda_key = openfda_key
+        self.quota = quota
         self._cache: OrderedDict[tuple, tuple[float, object]] = OrderedDict()
         self._ncbi_lock = asyncio.Lock()
         self._next_ncbi = 0.0
@@ -89,6 +92,8 @@ class ScienceSources:
             self._next_ncbi = time.monotonic() + .4
 
     async def _json(self, url: str, params: dict | None = None, *, ncbi: bool = False) -> dict:
+        if self.quota:
+            self.quota.take_provider()
         if ncbi:
             await self._pace_ncbi()
         try:
@@ -103,6 +108,8 @@ class ScienceSources:
             raise SourceError("Research provider unavailable") from exc
 
     async def _xml(self, url: str, params: dict) -> ET.Element:
+        if self.quota:
+            self.quota.take_provider()
         await self._pace_ncbi()
         try:
             async with self.session.get(url, params=params) as response:
@@ -244,6 +251,8 @@ class ScienceSources:
         }
         if self.openfda_key:
             params["api_key"] = self.openfda_key
+        if self.quota:
+            self.quota.take_provider()
         # No-match is a normal 404 on the openFDA count endpoint; avoid false failure reports.
         try:
             async with self.session.get(FDA_ENDPOINT, params=params) as response:

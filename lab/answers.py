@@ -5,6 +5,7 @@ import asyncio
 import re
 import aiohttp
 from .sources import ScienceSources, SourceError, Study
+from .quotas import QuotaGate, QuotaExceeded
 
 DISCLAIMER = ("Educational, not medical advice. A relevant paper does not prove a benefit or cause. "
               "Do not share private health details; AI-enabled questions and research excerpts go to Gemini.")
@@ -57,10 +58,12 @@ def clip_discord(text: str, limit: int = 1900) -> str:
 
 
 class GeminiAnswer:
-    def __init__(self, session: aiohttp.ClientSession, api_key: str, model: str = "gemini-3.5-flash-lite"):
+    def __init__(self, session: aiohttp.ClientSession, api_key: str,
+                 model: str = "gemini-3.5-flash-lite", quota: QuotaGate | None = None):
         self.session = session
         self.api_key = api_key
         self.model = model
+        self.quota = quota
 
     async def generate(self, question: str, studies: list[Study]) -> str:
         if not self.api_key:
@@ -75,6 +78,8 @@ class GeminiAnswer:
                 f"Question:\n{question[:220]}\n\nResearch evidence:\n{evidence}"}]}],
             "generationConfig": {"temperature": .2, "maxOutputTokens": 700},
         }
+        if self.quota:
+            self.quota.take_gemini()  # Atomic cross-user limit before any paid API call.
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         try:
             async with self.session.post(url, headers={"x-goog-api-key": self.api_key}, json=request) as response:
@@ -101,6 +106,8 @@ class ResearchAssistant:
     async def answer(self, question: str) -> str:
         try:
             studies = await self.sources.pubmed(question)
+        except QuotaExceeded:
+            return "The Lab has reached its research safety allowance. Try again after the usage window resets."
         except SourceError:
             return "PubMed is unavailable. I can't verify an answer without research sources. Try later."
         if not studies:
@@ -110,6 +117,8 @@ class ResearchAssistant:
         if self.ai and any(s.abstract for s in studies):
             try:
                 summary = await self.ai.generate(question, studies)
+            except QuotaExceeded:
+                summary = "The Lab reached its AI safety allowance; read the verified PubMed papers below."
             except SourceError:
                 summary = "AI synthesis is temporarily unavailable. Read the linked studies directly."
         elif self.ai:

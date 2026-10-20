@@ -65,6 +65,8 @@ async def answer(interaction: discord.Interaction, bot: LabBot, kind: str, value
         await interaction.response.send_message(
             f"Please wait {remaining} seconds before your next research request.", ephemeral=True)
         return
+    if not await bot.admit_interaction(interaction):
+        return
     await interaction.response.defer(ephemeral=True, thinking=True)
     if kind == "ask":
         content = await bot.research_answer(value)
@@ -167,6 +169,8 @@ class StrainQueryModal(discord.ui.Modal):
         self.add_item(self.search_term)
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not await interaction.client.admit_interaction(interaction):
+            return
         await interaction.response.send_message(
             strain_result_text(str(self.search_term.value)), ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none())
@@ -187,6 +191,8 @@ class PapersModal(discord.ui.Modal):
         if remaining:
             await interaction.response.send_message(
                 f"Try again in {remaining} seconds.", ephemeral=True)
+            return
+        if not await self.bot.admit_interaction(interaction):
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
         content = await self.bot.papers_answer(str(self.query.value), self.kind)

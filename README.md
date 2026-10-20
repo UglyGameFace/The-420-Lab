@@ -90,3 +90,17 @@ The panel's appearance is stored as its Discord embed. Each server/channel can h
 **Science limitations:** No automated output is a formal GRADE assessment or substitute for reading and critically evaluating full studies. Older catalog strain labels do not predict effects. FDA adverse-event submission counts are not causal or incidence estimates. The optional Gemini model may be wrong; verified source links should be read and users should speak with qualified clinicians about individual care.
 
 **Deployment:** Only DISCORD_TOKEN is essential. GEMINI_API_KEY is optional for synthesized answers, and NCBI_API_KEY and OPENFDA_API_KEY are optional for higher rate limits. Never commit secrets. The packaged strain-name JSON is bundled with the bot and does not require an external API or extra database.
+
+
+## Quota exhaustion and abuse resistance
+
+The bot uses a shared, fail-closed quota guard:
+- All expensive slash commands and panel requests use a shared per-user 10-minute allowance (default 8), per-server hourly allowance (default 80), and anonymous global command limits (default 15/min and 400/UTC day).
+- Every outbound Gemini request is checked immediately before calling the model, under global 2/min and 30/UTC-day caps. Public-source API calls are limited separately (45/min, 1200/UTC day) and NCBI requests continue to use pacing.
+- Anonymous global counts are updated atomically in a local SQLite ledger. The ledger contains **no user IDs, guild IDs, question text or secrets**. User/server counters are bounded process-local memory.
+- Local SQLite counters can survive a simple process restart **if the file is retained**, but may reset when hosting replaces the filesystem during a deployment. Configure LAB_QUOTA_DB_PATH to durable writable storage supported by your provider, and rely on provider-side caps to cover hosting losses. Multi-instance deployment requires a shared persistent store.
+- Configuration variables and conservative defaults are in .env.example. Avoid increasing limits until you know your Gemini tier and costs.
+- An API key is never included in response messages. Protect your Google API key using provider-side key restrictions. Gemini project-level spend caps have reporting latency and are not instantaneous; configure caps/alerts on the provider account as a separate line of defense. A billing budget alone is not necessarily a hard cap.
+- Rejected attempts are not queued for outbound paid calls, and reaching the Gemini cap keeps research paper links available when PubMed quota permits.
+
+This is quota defense, not a guarantee against every denial-of-service technique. Bots connected to many servers or with a shared deployment behind different processes need centralized rate governance.

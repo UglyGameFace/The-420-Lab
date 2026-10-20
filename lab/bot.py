@@ -17,6 +17,7 @@ from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
 from .health import LabHealth
+from .quotas import QuotaGate, QuotaExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class LabBot(commands.Bot):
         self.limiter = asyncio.Semaphore(3)
         self._panel_access = OrderedDict()
         self.health = LabHealth()
+        self.quota = QuotaGate()
         self._heartbeat_task = None
 
     async def setup_hook(self):
@@ -37,9 +39,10 @@ class LabBot(commands.Bot):
             timeout=aiohttp.ClientTimeout(total=18),
             headers={"User-Agent": "The420Lab/0.1 (Discord cannabis research bot)"})
         self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""),
-                                     os.getenv("OPENFDA_API_KEY", ""))
+                                     os.getenv("OPENFDA_API_KEY", ""), quota=self.quota)
         key = os.getenv("GEMINI_API_KEY", "")
-        ai = GeminiAnswer(self.http_session, key, os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")) if key else None
+        ai = GeminiAnswer(self.http_session, key, os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+                          quota=self.quota) if key else None
         self.assistant = ResearchAssistant(self.science, ai)
         # Register the persistent panel before syncing slash commands.
         self.add_view(LabPanelView(self))
@@ -65,6 +68,20 @@ class LabBot(commands.Bot):
             logger.info("Guild %s commands synced: %s", guild_id, ", ".join(sorted(guild_names)))
             if expected - guild_names:
                 raise RuntimeError("Discord guild sync omitted locally registered commands")
+
+    async def admit_interaction(self, interaction: discord.Interaction) -> bool:
+        """Central abuse check, shared by expensive slash commands and panel forms."""
+        try:
+            self.quota.admit_member(interaction.user.id, interaction.guild_id)
+        except QuotaExceeded as exc:
+            message = (f"The Lab's {exc.kind} usage safety limit was reached. "
+                       f"Try again in about {exc.retry_after} seconds.")
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+            return False
+        return True
 
     def panel_wait(self, user_id: int) -> int:
         """Bounded in-memory cooldown shared by all public panel actions."""
@@ -99,6 +116,8 @@ class LabBot(commands.Bot):
                         f"Formula: {item.formula} | Molecular weight: {item.molecular_weight} g/mol\n"
                         f"{item.url}\n\nChemistry does not establish health benefits or safe dosing.")
             return "PubChem did not find a matching record."
+        except QuotaExceeded:
+            return "The Lab has reached its public research request allowance. Try later."
         except (SourceError, ValueError):
             return "PubChem is temporarily unavailable for that compound."
 
@@ -114,6 +133,8 @@ class LabBot(commands.Bot):
             else:
                 message = "No matching registered studies found."
             return clip_discord(message + "\n\nTrial registration does not prove a treatment works.")
+        except QuotaExceeded:
+            return "The Lab has reached its public research request allowance. Try later."
         except SourceError:
             return "ClinicalTrials.gov is currently unavailable."
 
@@ -124,6 +145,8 @@ class LabBot(commands.Bot):
                 assert self.science is not None
                 data = await self.science.fda_reports(product)
             return clip_discord(report_message(data))
+        except QuotaExceeded:
+            return "The Lab has reached its public research request allowance. Try later."
         except ValueError:
             return "Choose a supported FDA-approved medicine from the menu."
         except SourceError:
@@ -151,6 +174,8 @@ class LabBot(commands.Bot):
             async with self.limiter:
                 assert self.science is not None
                 studies = await self.science.pubmed(topic, kind)
+        except QuotaExceeded:
+            return "The Lab has reached its public research request allowance. Try later."
         except (SourceError, ValueError):
             return "Unable to retrieve indexed PubMed results with this filter right now."
         if not studies:
@@ -190,6 +215,8 @@ bot = LabBot()
 @app_commands.describe(question="Ask about effects, benefits, risks, or cannabinoid research")
 @app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
 async def askthc(interaction: discord.Interaction, question: app_commands.Range[str, 4, 220]):
+    if not await bot.admit_interaction(interaction):
+        return
     await interaction.response.defer(ephemeral=True, thinking=True)
     await interaction.followup.send(await bot.research_answer(question),
                                     allowed_mentions=discord.AllowedMentions.none())
@@ -200,6 +227,8 @@ async def askthc(interaction: discord.Interaction, question: app_commands.Range[
 @app_commands.choices(name=[app_commands.Choice(name=k, value=k) for k in COMPOUNDS])
 @app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
 async def compound(interaction: discord.Interaction, name: str):
+    if not await bot.admit_interaction(interaction):
+        return
     await interaction.response.defer(ephemeral=True, thinking=True)
     await interaction.followup.send(await bot.compound_answer(name),
                                     allowed_mentions=discord.AllowedMentions.none())
@@ -209,6 +238,8 @@ async def compound(interaction: discord.Interaction, name: str):
 @app_commands.describe(topic="Example: anxiety, sleep, chronic pain")
 @app_commands.checks.cooldown(1, 15, key=lambda i: (i.guild_id, i.user.id))
 async def trials(interaction: discord.Interaction, topic: app_commands.Range[str, 3, 100]):
+    if not await bot.admit_interaction(interaction):
+        return
     await interaction.response.defer(ephemeral=True, thinking=True)
     await interaction.followup.send(await bot.trials_answer(topic),
                                     allowed_mentions=discord.AllowedMentions.none())
@@ -233,6 +264,8 @@ async def scienceguide(interaction: discord.Interaction, topic: str):
 ])
 @app_commands.checks.cooldown(1, 25, key=lambda i: (i.guild_id, i.user.id))
 async def fdareports(interaction: discord.Interaction, medicine: str):
+    if not await bot.admit_interaction(interaction):
+        return
     await interaction.response.defer(ephemeral=True, thinking=True)
     await interaction.followup.send(await bot.fda_answer(medicine),
                                     allowed_mentions=discord.AllowedMentions.none())
@@ -242,6 +275,8 @@ async def fdareports(interaction: discord.Interaction, medicine: str):
 @app_commands.describe(name="Strain or cultivar name, not an effect prediction")
 @app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
 async def strain(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
+    if not await bot.admit_interaction(interaction):
+        return
     bot.health.record("strain")
     await interaction.response.send_message(
         strain_result_text(name), ephemeral=True,
@@ -262,6 +297,8 @@ async def strain(interaction: discord.Interaction, name: app_commands.Range[str,
 @app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
 async def papers(interaction: discord.Interaction, topic: app_commands.Range[str, 3, 180],
                  study_design: str = "all"):
+    if not await bot.admit_interaction(interaction):
+        return
     await interaction.response.defer(ephemeral=True, thinking=True)
     await interaction.followup.send(await bot.papers_answer(topic, study_design),
                                     allowed_mentions=discord.AllowedMentions.none())
@@ -378,6 +415,9 @@ async def labhealth(interaction: discord.Interaction):
     report = bot.health.report(
         len(bot.guilds), len(bot.science._cache) if bot.science else 0,
         ai_enabled=bool(bot.assistant and bot.assistant.ai))
+    quota_lines = [f"{name}: {used}/{cap}" if used >= 0 else f"{name}: unavailable" 
+                   for name, (used, cap) in bot.quota.usage().items()]
+    report += "\n\n**Anonymous daily quotas:** " + " • ".join(quota_lines)
     await interaction.response.send_message(
         report, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
