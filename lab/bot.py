@@ -12,6 +12,7 @@ from discord.ext import commands
 from .sources import COMPOUNDS, ScienceSources, SourceError
 from .answers import GeminiAnswer, ResearchAssistant, clip_discord
 from .panel import LabPanelView, panel_embed
+from .guidance import GUIDES, guide_message
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,17 @@ async def trials(interaction: discord.Interaction, topic: app_commands.Range[str
     await interaction.response.defer(ephemeral=True, thinking=True)
     await interaction.followup.send(await bot.trials_answer(topic),
                                     allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="scienceguide", description="Explore official NIH CDC and FDA cannabis guidance")
+@app_commands.describe(topic="Choose an official health-information topic")
+@app_commands.choices(topic=[
+    app_commands.Choice(name=guide.title, value=key) for key, guide in GUIDES.items()
+])
+async def scienceguide(interaction: discord.Interaction, topic: str):
+    await interaction.response.send_message(
+        guide_message(topic), ephemeral=True,
+        allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="labpanel", description="Post the public interactive cannabis science panel")
