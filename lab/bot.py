@@ -27,7 +27,7 @@ class LabBot(commands.Bot):
             headers={"User-Agent": "The420Lab/0.1 (Discord cannabis research bot)"})
         self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""))
         key = os.getenv("GEMINI_API_KEY", "")
-        ai = GeminiAnswer(self.http_session, key, os.getenv("GEMINI_MODEL", "gemini-2.5-flash")) if key else None
+        ai = GeminiAnswer(self.http_session, key, os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")) if key else None
         self.assistant = ResearchAssistant(self.science, ai)
         guild_id = os.getenv("DISCORD_GUILD_ID", "").strip()
         if guild_id:

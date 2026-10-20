@@ -33,7 +33,7 @@ def clip_discord(text: str, limit: int = 1900) -> str:
 
 
 class GeminiAnswer:
-    def __init__(self, session: aiohttp.ClientSession, api_key: str, model: str = "gemini-2.5-flash"):
+    def __init__(self, session: aiohttp.ClientSession, api_key: str, model: str = "gemini-3.5-flash-lite"):
         self.session = session
         self.api_key = api_key
         self.model = model
@@ -49,7 +49,7 @@ class GeminiAnswer:
             "system_instruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
             "contents": [{"role": "user", "parts": [{"text":
                 f"Question:\n{question[:220]}\n\nResearch evidence:\n{evidence}"}]}],
-            "generationConfig": {"temperature": .2, "maxOutputTokens": 450},
+            "generationConfig": {"temperature": .2, "maxOutputTokens": 700},
         }
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         try:

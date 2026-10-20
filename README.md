@@ -17,7 +17,7 @@ Private (ephemeral) responses, per-user cooldowns, concurrent-request limits, sh
 1. Create a separate Discord bot on https://discord.com/developers/applications and invite it with bot and applications.commands scopes.
 2. Install Python 3.11+ and dependencies: python -m pip install -r requirements.txt
 3. Copy .env.example to .env on your development computer. Set DISCORD_TOKEN privately. For instant slash-command sync during testing, set DISCORD_GUILD_ID to your server ID. Do not commit real secrets.
-4. Optional conversational synthesis: create a Gemini API key at https://aistudio.google.com/apikey and set GEMINI_API_KEY. Free-tier quotas and model availability may vary. Without it, /askthc links original PubMed sources only. GEMINI_MODEL selects the model.
+4. Optional conversational synthesis: create a Gemini API key at https://aistudio.google.com/apikey and set GEMINI_API_KEY. Free-tier quotas and model availability may vary. Without it, /askthc links original PubMed sources only. GEMINI_MODEL selects the model (default gemini-3.5-flash-lite, with a supported free tier for eligible accounts).
 5. Start: python main.py
 
 **Discloud:** discloud.config sets NAME, TYPE=bot, MAIN=main.py, VERSION=3.11, RAM=256 and AUTORESTART=true. Store keys in private deployment environment variables. Confirm your Discloud plan permits these resources and deploy as a *separate application* from Dank Shield.
