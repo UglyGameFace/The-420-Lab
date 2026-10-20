@@ -172,6 +172,43 @@ class StrainQueryModal(discord.ui.Modal):
             allowed_mentions=discord.AllowedMentions.none())
 
 
+class PapersModal(discord.ui.Modal):
+    def __init__(self, bot: LabBot, kind: str):
+        super().__init__(title="Browse PubMed Evidence", timeout=300)
+        self.bot = bot
+        self.kind = kind
+        self.query = discord.ui.TextInput(
+            label="Cannabis science topic", placeholder="Try: cannabis and sleep",
+            min_length=3, max_length=180)
+        self.add_item(self.query)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        remaining = self.bot.panel_wait(interaction.user.id)
+        if remaining:
+            await interaction.response.send_message(
+                f"Try again in {remaining} seconds.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        content = await self.bot.papers_answer(str(self.query.value), self.kind)
+        await interaction.followup.send(
+            content, allowed_mentions=discord.AllowedMentions.none())
+
+
+class StudyDesignSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="All Study Designs", value="all"),
+            discord.SelectOption(label="Systematic Reviews", value="systematic"),
+            discord.SelectOption(label="Randomized Controlled Trials", value="randomized"),
+            discord.SelectOption(label="Observational Studies", value="observational"),
+        ]
+        super().__init__(placeholder="Select study type…", options=options,
+                         min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(PapersModal(self.view.bot, self.values[0]))
+
+
 class MemberMenu(discord.ui.View):
     def __init__(self, bot: LabBot, owner_id: int, item: discord.ui.Select):
         super().__init__(timeout=180)
@@ -220,6 +257,14 @@ class LibraryMenu(discord.ui.View):
     async def strain_names(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(StrainQueryModal())
 
+    @discord.ui.button(label="Advanced Evidence Search", emoji="🧪",
+                       style=discord.ButtonStyle.secondary)
+    async def advanced_papers(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "**Advanced PubMed:** filter by the study design indexed by PubMed. "
+            "Design is not an evidence quality grade.",
+            view=MemberMenu(self.bot, interaction.user.id, StudyDesignSelect()), ephemeral=True)
+
 class LabPanelView(discord.ui.View):
     """Stable custom IDs and timeout=None enable restart-safe callbacks."""
     def __init__(self, bot: LabBot):
@@ -253,7 +298,7 @@ class LabPanelView(discord.ui.View):
         embed = discord.Embed(title="The 420 Lab • How to Use", color=discord.Color.from_rgb(18, 123, 82))
         embed.description = (
             "**Ask:** Type any science question.\n**Topics:** Choose a preset research question.\n"
-            "**Cannabinoids:** Explore PubChem chemistry.\n**Research:** Studies, trials, official guides, FDA reports and historical strain names.\n\n"
+            "**Cannabinoids:** Explore PubChem chemistry.\n**Research:** Studies, advanced design filters, trials, guides, FDA reports and strain names.\n\n"
             "Your responses are private. If enabled, Gemini receives your question and source excerpts; "
             "do not enter private health details. A paper or trial listing isn't proof of benefit. "
             "For severe symptoms, contact emergency services.")
