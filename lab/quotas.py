@@ -47,6 +47,75 @@ class QuotaGate:
         self.guilds: OrderedDict[int, deque[float]] = OrderedDict()
         self._initialize()
 
+    LIMIT_FIELDS = (
+        "member_10m", "guild_hour", "global_minute", "global_daily",
+        "gemini_minute", "gemini_daily", "api_minute", "api_daily"
+    )
+
+    def _read_limit(self, name: str) -> int:
+        """Read the live owner-selected cap, bounded by the deployment's ceiling."""
+        if name not in self.LIMIT_FIELDS:
+            raise ValueError("Unknown quota setting")
+        ceiling = getattr(self, name)
+        try:
+            with closing(self._connect()) as db:
+                row = db.execute("SELECT value FROM guard_settings WHERE name=?", (name,)).fetchone()
+            if not row:
+                return ceiling
+            value = row[0]
+            if type(value) is not int or not 1 <= value <= ceiling:
+                raise QuotaExceeded("storage-unavailable", 60)
+            return value
+        except sqlite3.Error as exc:
+            raise QuotaExceeded("storage-unavailable", 60) from exc
+
+    def limit(self, name: str) -> int:
+        return self._read_limit(name)
+
+    def set_limit(self, name: str, value: int):
+        """Bot owner may tighten or restore a cap, never exceed the environment ceiling."""
+        if name not in self.LIMIT_FIELDS:
+            raise ValueError("Unsupported setting")
+        maximum = getattr(self, name)
+        if type(value) is not int or not 1 <= value <= maximum:
+            raise ValueError(f"Must be an integer from 1 to {maximum}")
+        try:
+            with closing(self._connect()) as db, db:
+                db.execute(
+                    """INSERT INTO guard_settings(name,value) VALUES (?,?)
+                    ON CONFLICT(name) DO UPDATE SET value=excluded.value""",
+                    (name, value))
+        except sqlite3.Error as exc:
+            raise QuotaExceeded("storage-unavailable", 60) from exc
+
+    def ai_enabled(self) -> bool:
+        """Deployment kill switch is absolute; Discord can additionally pause AI."""
+        if os.getenv("LAB_AI_ENABLED", "true").strip().lower() not in {"1", "true", "on", "yes"}:
+            return False
+        try:
+            with closing(self._connect()) as db:
+                row = db.execute("SELECT value FROM guard_settings WHERE name='ai_enabled'").fetchone()
+        except sqlite3.Error as exc:
+            raise QuotaExceeded("storage-unavailable", 60) from exc
+        if row is None:
+            return True
+        if row[0] not in (0, 1):
+            raise QuotaExceeded("storage-unavailable", 60)
+        return bool(row[0])
+
+    def set_ai_enabled(self, enabled: bool):
+        if type(enabled) is not bool:
+            raise ValueError("AI control expects a boolean")
+        if enabled and os.getenv("LAB_AI_ENABLED", "true").strip().lower() not in {"1","true","on","yes"}:
+            raise ValueError("AI disabled in hosting environment; Discord cannot override that setting")
+        try:
+            with closing(self._connect()) as db, db:
+                db.execute(
+                    """INSERT INTO guard_settings(name,value) VALUES ('ai_enabled',?)
+                    ON CONFLICT(name) DO UPDATE SET value=excluded.value""", (int(enabled),))
+        except sqlite3.Error as exc:
+            raise QuotaExceeded("storage-unavailable", 60) from exc
+
     def _connect(self):
         # Fail closed on disk / permission errors, rather than silently lifting quotas.
         db = sqlite3.connect(self.db_path, timeout=2.0)
@@ -64,6 +133,10 @@ class QuotaGate:
                 used INTEGER NOT NULL,
                 PRIMARY KEY (scope, window)
             )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS guard_settings (
+                name TEXT PRIMARY KEY, value INTEGER NOT NULL
+            )""")
+
 
     def _take_global(self, category: str, quotas: tuple[tuple[str, int, int], ...],
                      now: int | None = None) -> None:
@@ -96,14 +169,16 @@ class QuotaGate:
             raise QuotaExceeded("storage-unavailable", 60) from exc
 
     def take_gemini(self, *, now: int | None = None):
+        if not self.ai_enabled():
+            raise QuotaExceeded("ai-paused", 60)
         self._take_global("gemini", (
-            ("minute", 60, self.gemini_minute),
-            ("daily", 86400, self.gemini_daily)), now)
+            ("minute", 60, self.limit("gemini_minute")),
+            ("daily", 86400, self.limit("gemini_daily"))), now)
 
     def take_provider(self, *, now: int | None = None):
         self._take_global("provider", (
-            ("minute", 60, self.api_minute),
-            ("daily", 86400, self.api_daily)), now)
+            ("minute", 60, self.limit("api_minute")),
+            ("daily", 86400, self.limit("api_daily"))), now)
 
     @staticmethod
     def _verify_window(table: OrderedDict[int, deque[float]], identity: int,
@@ -125,23 +200,23 @@ class QuotaGate:
     def admit_member(self, user_id: int, guild_id: int | None,
                      *, now: float | None = None, utc: int | None = None):
         tick = time.monotonic() if now is None else now
-        user_wait = self._verify_window(self.users, user_id, tick, 600, self.member_10m)
-        guild_wait = self._verify_window(self.guilds, guild_id or 0, tick, 3600, self.guild_hour)
+        user_wait = self._verify_window(self.users, user_id, tick, 600, self.limit("member_10m"))
+        guild_wait = self._verify_window(self.guilds, guild_id or 0, tick, 3600, self.limit("guild_hour"))
         if user_wait:
             raise QuotaExceeded("member", user_wait)
         if guild_wait:
             raise QuotaExceeded("server", guild_wait)
         self._take_global("command", (
-            ("minute", 60, self.global_minute),
-            ("daily", 86400, self.global_daily)), utc)
+            ("minute", 60, self.limit("global_minute")),
+            ("daily", 86400, self.limit("global_daily"))), utc)
         self.users[user_id].append(tick)
         self.guilds[guild_id or 0].append(tick)
 
     def usage(self) -> dict[str, tuple[int, int]]:
         """Only anonymous current-day counts; don't expose member identities."""
         window = int(time.time()) // 86400
-        caps = {"command": self.global_daily, "gemini": self.gemini_daily,
-                "provider": self.api_daily}
+        caps = {"command": self.limit("global_daily"), "gemini": self.limit("gemini_daily"),
+                "provider": self.limit("api_daily")}
         try:
             with closing(self._connect()) as db:
                 return {name: (
