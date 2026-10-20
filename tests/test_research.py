@@ -1,7 +1,7 @@
 """Network-mocked regression tests. No live tokens required."""
 import unittest
 from unittest.mock import AsyncMock
-from lab.answers import GeminiAnswer, ResearchAssistant
+from lab.answers import DISCLAIMER, GeminiAnswer, ResearchAssistant
 from lab.sources import ScienceSources, SourceError, Study
 
 
@@ -137,7 +137,7 @@ class AnswerTests(unittest.IsolatedAsyncioTestCase):
         answer = await ResearchAssistant(sources, ai).answer("Anxiety?")
         self.assertLessEqual(len(answer), 1900)
         self.assertIn(self.studies[0].url, answer)
-        self.assertIn("Educational information", answer)
+        self.assertIn(DISCLAIMER, answer)
 
 
 if __name__ == "__main__":
