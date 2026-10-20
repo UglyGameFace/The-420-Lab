@@ -18,15 +18,38 @@ SYSTEM_INSTRUCTION = (
     "isn't enough evidence. Discuss potential benefits and harms when relevant. Avoid personalized "
     "diagnoses, dose recommendations, sales, or intoxication optimization. For severe symptoms "
     "(chest pain, unconsciousness, breathing trouble, seizures) advise emergency services. "
+    "Publication-type tags describe study design, not quality, clinical benefit, or certainty. "
+    "Do not conclude effects from a title, abstract, or publication type alone. "
     "No markdown links or inline citation numbers: the bot appends verified sources. "
     "Keep your answer under 850 characters."
 )
 
 
+def study_design(types: tuple[str, ...]) -> str:
+    """Publication type reported by PubMed is a DESIGN label, never an evidence-quality grade."""
+    tags = {value.casefold() for value in types}
+    for key, label in (
+        ("systematic review", "Systematic review"),
+        ("meta-analysis", "Meta-analysis"),
+        ("randomized controlled trial", "Randomized controlled trial"),
+        ("controlled clinical trial", "Controlled clinical trial"),
+        ("clinical trial", "Clinical trial"),
+        ("observational study", "Observational study"),
+        ("case reports", "Case report"),
+        ("review", "Review (may not be systematic)"),
+    ):
+        if key in tags:
+            return label
+    return "Design not classified by PubMed"
+
+
 def study_links(studies: list[Study]) -> str:
-    return "\n".join(
-        f"• {s.title[:110]} ({s.journal[:45]})\n  {s.url}" for s in studies[:3]
-    )
+    lines = []
+    for study in studies[:3]:
+        metadata = " • ".join(part for part in (
+            study.journal[:34], study.year, study_design(study.publication_types)) if part)
+        lines.append(f"• {study.title[:100]}\n  {metadata}\n  {study.url}")
+    return "\n".join(lines)
 
 
 def clip_discord(text: str, limit: int = 1900) -> str:
@@ -43,7 +66,7 @@ class GeminiAnswer:
         if not self.api_key:
             raise SourceError("AI not configured")
         evidence = "\n\n".join(
-            f"Study {i + 1}: {s.title}\nJournal: {s.journal}\nAbstract: {s.abstract or '[No abstract available]'}"
+            f"Study {i + 1}: {s.title}\nJournal: {s.journal}\n"f"PubMed index: {study_design(s.publication_types)}\n"f"Abstract: {s.abstract or '[No abstract available]'}"
             for i, s in enumerate(studies)
         )
         request = {
@@ -92,6 +115,7 @@ class ResearchAssistant:
         elif self.ai:
             summary = "The studies returned no abstracts to support a reliable summary."
         links = study_links(studies)
-        reserved = len(links) + len(DISCLAIMER) + len("\n\nPubMed sources:\n\n") + 1
+        note = "Study-design labels are not ratings of evidence strength or certainty."
+        reserved = len(links) + len(DISCLAIMER) + len(note) + len("\n\nPubMed sources:\n\n") + 4
         text = clip_discord(summary, max(100, 1900 - reserved))
-        return f"{text}\n\nPubMed sources:\n{links}\n\n{DISCLAIMER}"
+        return f"{text}\n\nPubMed sources:\n{links}\n\n{note}\n{DISCLAIMER}"
