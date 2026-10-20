@@ -1,4 +1,5 @@
 """Network-mocked regression tests. No live tokens required."""
+import importlib.util
 import unittest
 from unittest.mock import AsyncMock
 from lab.answers import DISCLAIMER, GeminiAnswer, ResearchAssistant
@@ -151,6 +152,16 @@ class AnswerTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(answer), 1900)
         self.assertIn(self.studies[0].url, answer)
         self.assertIn(DISCLAIMER, answer)
+
+
+class DiscordRegistryTests(unittest.TestCase):
+    def test_expected_slash_commands(self):
+        if importlib.util.find_spec("discord") is None:
+            self.skipTest("discord.py not installed in this local environment")
+        from lab.bot import bot
+        commands = {command.name for command in bot.tree.get_commands()}
+        self.assertEqual(commands, {"askthc", "compound", "trials"})
+        self.assertFalse(bot.intents.message_content)
 
 
 if __name__ == "__main__":
