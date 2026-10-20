@@ -1,6 +1,7 @@
 """Restart-safe public research panel with private answers."""
 from __future__ import annotations
 import logging
+import re
 from typing import TYPE_CHECKING
 import discord
 from .sources import COMPOUNDS
@@ -23,13 +24,33 @@ TOPICS = {
     "medications": "What interactions between cannabinoids and medications have been studied?",
 }
 
-def panel_embed() -> discord.Embed:
+PANEL_THEMES = {
+    "forest": 0x127B52,
+    "mint": 0x2BBF91,
+    "violet": 0x7255B8,
+    "slate": 0x4B6473,
+}
+
+def safe_panel_text(value: str | None, *, max_length: int) -> str:
+    """Keep public, per-server branding free of mass mentions and links."""
+    if not value:
+        return ""
+    value = re.sub(r"https?://\S+", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"[<>@]", "", value).replace(chr(96), "")
+    value = re.sub(r"\s+", " ", value).strip()
+    return value[:max_length]
+
+def panel_embed(title: str | None = None, intro: str | None = None,
+                theme: str = "forest") -> discord.Embed:
+    heading = safe_panel_text(title, max_length=75) or "THE 420 LAB | Cannabis Science Desk"
+    opening = safe_panel_text(intro, max_length=240) or (
+        "Learn about THC, CBD, and cannabis using published research and official health guidance."
+    )
     embed = discord.Embed(
-        title="🌿 THE 420 LAB | Cannabis Science Desk",
-        description="**Learn about THC, CBD, and cannabis with actual research.**\n"
-                    "Explore benefits **and** risks, look up cannabinoids, or dig into clinical trials. "
-                    "Start with any button below. No commands to memorize.",
-        color=discord.Color.from_rgb(18, 123, 82))
+        title="🌿 " + heading,
+        description=f"**{opening}**\nChoose a button to explore benefits and risks, "
+                    "cannabinoids, research, and historical strain names.",
+        color=PANEL_THEMES.get(theme, PANEL_THEMES["forest"]))
     embed.add_field(name="🧠 Ask the Lab", value="Enter your own question about effects or science.", inline=False)
     embed.add_field(name="📚 Explore Topics", value="Benefits, risks, anxiety, sleep, tolerance and more.", inline=False)
     embed.add_field(name="🧬 Cannabinoids", value="THC, CBD, CBG, CBN, THCA: sourced chemical facts.", inline=False)
