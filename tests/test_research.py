@@ -282,13 +282,41 @@ class FDASafetyReportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(fake.calls), 1)
 
 
+class StrainCatalogTests(unittest.TestCase):
+    def test_snapshot_index_is_attributed_and_bounded(self):
+        from lab.strains import load_catalog, lookup, result_text
+        self.assertGreater(len(load_catalog()), 5000)
+        self.assertLess(len(load_catalog()), 15000)
+        matches = lookup("Northern Lights")
+        self.assertTrue(matches)
+        self.assertLessEqual(len(matches), 5)
+        output = result_text("Northern Lights")
+        self.assertIn("Historical", output)
+        self.assertIn("2017", output)
+        self.assertIn("do not reliably predict", output)
+        self.assertNotIn("Pain relief", output)
+
+    def test_lookup_does_not_allow_mass_mentions(self):
+        from lab.strains import lookup, result_text
+        self.assertEqual(lookup("@everyone"), [])
+        self.assertEqual(lookup("a"), [])
+        self.assertNotIn("@everyone", result_text("@everyone"))
+
+    def test_mit_license_notice_preserved(self):
+        from pathlib import Path
+        path = Path(__file__).resolve().parents[1] / "ATTRIBUTIONS.md"
+        notice = path.read_text(encoding="utf-8")
+        self.assertIn("Copyright (c) 2016-present, Kushy", notice)
+        self.assertIn("MIT License", notice)
+
+
 class DiscordRegistryTests(unittest.TestCase):
     def test_expected_slash_commands(self):
         if importlib.util.find_spec("discord") is None:
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -359,6 +387,12 @@ class PublicPanelTests(unittest.TestCase):
         menu = LibraryMenu(bot, 123)
         self.assertIn("FDA Safety Reports", [item.label for item in menu.children])
         self.assertEqual(len(FDAProductSelect().options), 4)
+
+    def test_library_has_strain_reference(self):
+        from lab.bot import bot
+        from lab.panel import LibraryMenu
+        self.assertIn("Strain Name Reference",
+                      [item.label for item in LibraryMenu(bot, 123).children])
 
     def test_panel_cooldown_is_bounded(self):
         from lab.bot import bot
