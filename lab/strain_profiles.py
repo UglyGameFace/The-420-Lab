@@ -220,8 +220,8 @@ def source_directory_embed():
         title="🔬 The Weed Doctor | Sources & Content Rights",
         description=(
             "Different sources answer different questions. "
-            "**30,582** local search names are not 30,582 lab-tested profiles, "
-            "photos, or current review pages."
+            f"**{catalog_counts()['distinct']:,}** local search names are not "
+            "the same number of lab-tested profiles, photos, or current review pages."
         ),
         color=0x127B52)
     embed.add_field(
