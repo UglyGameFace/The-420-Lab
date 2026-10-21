@@ -63,8 +63,10 @@ class GrowerStoreTests(unittest.TestCase):
         self.hub.configure(self.guild, 101, 102)
 
     def submit(self, user=123, strain="Blue Dream", stage="flowering", message=1001):
-        return self.hub.submit(self.guild, user, "GardenGamer", strain,
-                               stage, "Real progress photo", message, 101)
+        reserved = self.hub.begin_upload(
+            self.guild, user, "GardenGamer", strain, stage, "Real progress photo", 101)
+        self.hub.finish_upload(self.guild, reserved, message)
+        return reserved
 
     def _age_operation(self, item_id):
         old = (datetime.now(timezone.utc) - timedelta(minutes=6)).strftime(
@@ -72,6 +74,51 @@ class GrowerStoreTests(unittest.TestCase):
         with sqlite3.connect(self.path) as db:
             db.execute("UPDATE grower_submissions SET operation_utc=? WHERE id=?",
                        (old, item_id))
+
+    def test_upload_reservation_persists_across_restart_and_can_be_adopted(self):
+        upload_id = self.hub.begin_upload(
+            self.guild, 123, "GardenGamer", "Blue Dream", "flowering", "", 101)
+        reserved = self.hub.item(self.guild, upload_id)
+        self.assertEqual(reserved[8], "uploading")
+        self.assertEqual(reserved[6], "0")
+        self.assertEqual(reserved[9], "101")
+        self.assertEqual(self.hub.stats(self.guild, 123)[:3], (0, 1, 0))
+        self.assertEqual(self.hub.my_uploads(self.guild, 123)[0][2], "uploading")
+        self.assertEqual(self.hub.pending(self.guild), [])
+        with self.assertRaises(ValueError):
+            self.hub.lock(self.guild, upload_id, purpose="review")
+        with self.assertRaises(ValueError):
+            self.hub.finish_upload(self.guild, upload_id, 0)
+        self._age_operation(upload_id)
+        again = GrowerHub(StrainProfileStore(self.path))
+        self.assertEqual(again.interrupted(self.guild), [(upload_id, "uploading")])
+        self.assertTrue(again.upload_is_interrupted(self.guild, upload_id))
+        again.finish_upload(self.guild, upload_id, 6001)
+        self.assertEqual(again.item(self.guild, upload_id)[8], "pending")
+        self.assertEqual(again.item(self.guild, upload_id)[6], "6001")
+        self.assertFalse(again.upload_is_interrupted(self.guild, upload_id))
+        with self.assertRaises(ValueError):
+            again.finish_upload(self.guild, upload_id, 6002)
+
+    def test_interrupted_upload_can_be_discarded_but_not_while_active(self):
+        upload_id = self.hub.begin_upload(
+            self.guild, 123, "GardenGamer", "Blue Dream", "flowering", "", 101)
+        with self.assertRaises(ValueError):
+            self.hub.discard_interrupted_upload(self.guild, upload_id)
+        self._age_operation(upload_id)
+        self.hub.discard_interrupted_upload(self.guild, upload_id)
+        self.assertIsNone(self.hub.item(self.guild, upload_id))
+
+    def test_unconfirmed_uploads_count_toward_daily_and_pending_caps(self):
+        uploads = [self.hub.begin_upload(
+            self.guild, 123, "GardenGamer", "Blue Dream", "flowering", "", 101)
+            for _ in range(3)]
+        self.assertEqual(len(set(uploads)), 3)
+        with self.assertRaises(ValueError):
+            self.hub.begin_upload(
+                self.guild, 123, "GardenGamer", "Blue Dream", "flowering", "", 101)
+        self.assertEqual(self.hub.stats(self.guild, 123)[1], 3)
+        self.assertFalse(self.hub.pending(self.guild))
 
     def test_review_interrupt_reconciliation_and_safe_requeue(self):
         item_id = self.submit()
@@ -133,15 +180,15 @@ class GrowerStoreTests(unittest.TestCase):
                                     approved=True, submission_id=19)
         self.assertTrue(approved.footer.text.startswith("Grower submission #19 | "))
         pending = _submission_card("Grower", "Blue Dream", "flowering", "",
-                                   approved=False)
-        self.assertNotIn("Grower submission", pending.footer.text)
+                                   approved=False, submission_id=19)
+        self.assertTrue(pending.footer.text.startswith("Grower upload #19 | "))
 
     def test_server_opt_in_and_suspension(self):
         self.assertEqual(self.hub.configuration(self.guild), ("101", "102", 1))
         with self.assertRaises(ValueError):
             self.hub.configure(self.guild, 101, 101)
         with self.assertRaises(ValueError):
-            self.hub.submit(999, 123, "User", "Blue Dream", "flowering", "", 50, 101)
+            self.hub.begin_upload(999, 123, "User", "Blue Dream", "flowering", "", 101)
         self.hub.configure(self.guild, 101, 102, enabled=False)
         with self.assertRaises(ValueError):
             self.submit()
@@ -194,9 +241,9 @@ class GrowerStoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.submit(message=1009)
         with self.assertRaises(ValueError):
-            self.hub.submit(self.guild, 101, "Me", "Blue Dreem", "flowering", "", 99, 101)
+            self.hub.begin_upload(self.guild, 101, "Me", "Blue Dreem", "flowering", "", 101)
         with self.assertRaises(ValueError):
-            self.hub.submit(self.guild, 101, "Me", "Blue Dream", "purchase", "", 99, 101)
+            self.hub.begin_upload(self.guild, 101, "Me", "Blue Dream", "purchase", "", 101)
         self.assertEqual(len(self.hub.pending(self.guild)), 3)
 
     def test_channel_reconfiguration_preserves_previous_submission_locations(self):
@@ -213,7 +260,7 @@ class GrowerStoreTests(unittest.TestCase):
         self.hub.delete(self.guild, first_id, "removing")
         self.assertIsNone(self.hub.item(self.guild, first_id))
         with self.assertRaises(ValueError):
-            self.hub.submit(self.guild, 555, "Grower", "Blue Dream", "harvest", "", 5, 101)
+            self.hub.begin_upload(self.guild, 555, "Grower", "Blue Dream", "harvest", "", 101)
 
     def test_anonymized_identity_does_not_store_discord_user_id(self):
         self.submit(user=987654321987654321)
@@ -261,8 +308,9 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
             store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
             hub = GrowerHub(store)
             hub.configure(22, 101, 102)
-            sid = hub.submit(22, 400, "Grower", "Blue Dream", "flowering",
-                             "Original photo", 301, 101)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream", "flowering",
+                                   "Original photo", 101)
+            hub.finish_upload(22, sid, 301)
             hub.lock(22, sid, purpose="review")
             hub.approve(22, sid, 302, 102)
             hub.configure(22, 201, 202)
@@ -285,8 +333,9 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
             store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
             hub = GrowerHub(store)
             hub.configure(22, 101, 102)
-            sid = hub.submit(22, 400, "Grower", "Blue Dream", "flowering",
-                             "Original photo", 301, 101)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream", "flowering",
+                                   "Original photo", 101)
+            hub.finish_upload(22, sid, 301)
             hub.lock(22, sid, purpose="review")
             hub.approve(22, sid, 302, 102)
             interaction = SimpleNamespace(guild_id=22)
@@ -305,8 +354,9 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
             store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
             hub = GrowerHub(store)
             hub.configure(22, 101, 102)
-            sid = hub.submit(22, 400, "Grower", "Blue Dream", "flowering",
-                             "Original photo", 301, 101)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream", "flowering",
+                                   "Original photo", 101)
+            hub.finish_upload(22, sid, 301)
             hub.lock(22, sid, purpose="review")
             hub.prepare_review(22, sid, 102)
             old = (datetime.now(timezone.utc) - timedelta(minutes=6)).strftime(
@@ -344,8 +394,9 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
             store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
             hub = GrowerHub(store)
             hub.configure(22, 101, 102)
-            sid = hub.submit(22, 400, "Grower", "Blue Dream", "flowering",
-                             "Original photo", 301, 101)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream", "flowering",
+                                   "Original photo", 101)
+            hub.finish_upload(22, sid, 301)
             hub.lock(22, sid, purpose="review")
             hub.prepare_review(22, sid, 102)
             old = (datetime.now(timezone.utc) - timedelta(minutes=6)).strftime(
