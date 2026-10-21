@@ -173,3 +173,30 @@ rights. OpenTHC publishes a common data model, not an open universal list.
 Leafly and other review sites have restrictive reuse terms and must not be
 silently scraped into our bot. No user-generated medical effects or product
 THC percentages are treated as clinical facts.
+
+## Leafly source support
+
+Commands /leafly and /straininfo, the Find Strains panel button, and
+Research Library's Leafly Strain Profiles all provide Leafly references.
+Ten individually verified Leafly profile links are available, including
+Blue Dream, Super Boof, Northern Lights, Permanent Marker, RS11, Gelato 41,
+Animal Face, Runtz, Lemon Cherry Gelato and Wedding Cake. Known aliases
+such as Blockberry resolve to the verified primary profile. Unverified
+names get a site-restricted external search instead of a fabricated URL.
+Search results still include the 2017/2026 locally licensed catalogs.
+
+Optional authorized CSV: Set LEAFLY_LICENSED_CSV_PATH to the path of an
+owner-supplied, legitimately licensed Leafly-compatible export. Supported
+fields are Strain/Name, Rating, Effects and Flavor/Flavors. If a row matches
+a requested name, the bot displays the supplied historical rating and
+self-reported effects and flavors with clear uncertainty warnings.
+The CSV is not supplied, fetched, or redistributed by this repository.
+The import is limited to 16 MiB and at most 100,000 rows.
+
+Why not simply reuse CannaBot's advertised database? The public GitHub
+repository canna-dev/cannabot includes a CSV reader but does NOT include
+the required data/leafly_strain_data.csv. Nor does it provide a public live
+Leafly strain API. Leafly's July 2026 terms restrict automated querying
+and mining. The Weed Doctor does not scrape or copy Leafly's proprietary
+reviews. Official reference: https://www.leafly.com/strains
+Terms: https://www.leafly.com/info/terms-of-use
