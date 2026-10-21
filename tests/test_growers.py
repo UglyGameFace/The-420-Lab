@@ -90,6 +90,10 @@ class GrowerStoreTests(unittest.TestCase):
         self.assertEqual(self.hub.item(self.guild, item_id)[7], "5001")
         self.assertEqual(self.hub.stats(self.guild, 123),
                          (1, 0, 1, "🌱 First Showcase"))
+        journal = self.hub.journal(self.guild, 123, "Blue Dream")
+        self.assertEqual(len(journal), 1)
+        self.assertEqual(journal[0][4], "5001")
+        self.assertFalse(self.hub.journal(self.guild, 999))
         self.assertEqual(self.hub.stats(self.guild, 999)[:3], (0, 0, 0))
         self.assertFalse(self.hub.pending(self.guild))
 
@@ -141,7 +145,7 @@ class GrowerCommandsTests(unittest.TestCase):
     def test_commands_are_registered_on_existing_bot(self):
         names = {command.name: command for command in bot.tree.get_commands()}
         for cmd in ("growerconfig", "growersubmit", "growerqueue", "growerreview",
-                    "growerprofile", "growerwithdraw", "growerremove"):
+                    "growerprofile", "growerjournal", "growerwithdraw", "growerremove"):
             self.assertIn(cmd, names)
         for manager in ("growerconfig", "growerqueue", "growerreview", "growerremove"):
             self.assertTrue(names[manager].default_permissions.manage_guild)
@@ -149,8 +153,9 @@ class GrowerCommandsTests(unittest.TestCase):
     def test_upload_and_profile_are_private_by_default(self):
         from inspect import signature
         commands = {command.name: command for command in bot.tree.get_commands()}
-        self.assertIs(signature(commands["growerprofile"].callback)
-                      .parameters["public"].default, False)
+        for command_name in ("growerprofile", "growerjournal"):
+            self.assertIs(signature(commands[command_name].callback)
+                          .parameters["public"].default, False)
 
 
 class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
