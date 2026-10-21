@@ -356,7 +356,7 @@ class DiscordRegistryTests(unittest.TestCase):
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth", "strains"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -402,17 +402,53 @@ class CommandSyncScopeTests(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(importlib.util.find_spec("discord"), "discord.py is required")
 class PublicPanelTests(unittest.TestCase):
-    def test_panel_is_persistent_and_has_five_actions(self):
+    def test_panel_is_persistent_and_has_six_actions(self):
         from lab.bot import bot
         from lab.panel import LabPanelView, panel_embed, TOPICS
         view = LabPanelView(bot)
         self.assertTrue(view.is_persistent())
-        self.assertEqual(len(view.children), 5)
+        self.assertEqual(len(view.children), 6)
         ids = [item.custom_id for item in view.children]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertTrue(all(x.startswith("the420lab:panel:v1:") for x in ids))
         self.assertIn("Answers are private", panel_embed().footer.text)
         self.assertIn("risks", TOPICS)
+
+    def test_public_panel_explains_strain_lookup(self):
+        from lab.bot import bot
+        from lab.panel import LabPanelView, StrainQueryModal, panel_embed
+        view = LabPanelView(bot)
+        actions = {child.label: child for child in view.children}
+        self.assertIn("Find Strains", actions)
+        self.assertEqual(actions["Find Strains"].custom_id, "the420lab:panel:v1:strain")
+        self.assertIn("/strains", panel_embed().fields[3].value)
+        modal = StrainQueryModal()
+        self.assertIn("strain", modal.title.lower())
+        self.assertIn("Northern Lights", modal.search_term.placeholder)
+
+    async def test_legacy_panel_upgrade_is_scheduled_without_blocking(self):
+        from lab.bot import bot
+        from lab.panel import LabPanelView
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, patch
+        import asyncio
+        view = LabPanelView(bot)
+        old_button = SimpleNamespace(custom_id="the420lab:panel:v1:ask")
+        post = SimpleNamespace(
+            id=123, author=SimpleNamespace(id=42),
+            components=[SimpleNamespace(children=[old_button])],
+            embeds=[SimpleNamespace(title="Custom server research panel")],
+            edit=AsyncMock())
+        interaction = SimpleNamespace(message=post)
+        with patch.object(bot, "user", SimpleNamespace(id=42)):
+            self.assertTrue(await view.interaction_check(interaction))
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+        post.edit.assert_awaited_once()
+        opts = post.edit.await_args.kwargs
+        self.assertIn("view", opts)
+        self.assertNotIn("embed", opts)  # Don't overwrite existing server branding.
+        self.assertEqual(len(opts["view"].children), 6)
 
     def test_library_exposes_official_guides(self):
         from lab.bot import bot

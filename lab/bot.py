@@ -297,6 +297,14 @@ async def strain(interaction: discord.Interaction, name: app_commands.Range[str,
         allowed_mentions=discord.AllowedMentions.none())
 
 
+@bot.tree.command(name="strains", description="Find cannabis strain names (try Northern Lights)")
+@app_commands.describe(name="Enter a strain name, e.g. Northern Lights")
+@app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
+async def strains(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
+    """Clearer public alias for the historical /strain command."""
+    await strain.callback(interaction, name=name)
+
+
 @bot.tree.command(name="papers", description="Browse PubMed papers by indexed research design")
 @app_commands.describe(topic="Cannabis research question or topic",
                        study_design="Choose a published study-design filter")

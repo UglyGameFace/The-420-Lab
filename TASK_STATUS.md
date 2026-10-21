@@ -90,3 +90,8 @@ Added boot-level SQLite continuity markers, startup diagnostics and /labcontrol 
 ## Current active rebrand: The Weed Doctor
 
 User requested rebranding from The 420 Lab to The Weed Doctor. Discord-visible titles, panels, help messages, owner controls, system prompt, Discloud display name and primary documentation were renamed. Four brand-forward command aliases were added while retaining old slash commands and stable persistent panel custom IDs for backward compatibility. Default older posted panels update on their next interaction, without overwriting server-custom titles. The legacy GitHub repo slug and internal module/config identifiers remain for deployment safety. Discord app name and bot username still require an authorized Developer Portal rename; code cannot establish that update.
+
+
+## Strain discoverability fix
+
+User reported strain discovery and instructions were unclear. Added a prominent 🌱 Find Strains root button on the public panel (six total); a self-explanatory `/strains name` alias to the existing `/strain` handler; explicit example Northern Lights in modal, panel embed, help text and README. Legacy public panels upgrade their view after the next button interaction without overwriting server-custom titles. Kept old button identifiers, per-user quota admission and ephemeral answers intact. Validate GitHub Actions, Discloud and live Discord UI; actual live interaction not yet inspected.

@@ -46,7 +46,7 @@ Public API references:
 
 A server manager runs **/labpanel** in the desired text channel to post a public science desk. The bot needs View Channel, Send Messages, Embed Links, and applications.commands. No Administrator permission or Message Content Intent is required. The command enforces **Manage Server** permission at runtime.
 
-The panel stays usable across bot restarts through stable persistent component IDs registered in setup_hook. Any member may press **Ask the Doctor**, **Explore Topics**, **Cannabinoids**, **Research Library**, or **Help & Safety**. Topic and molecule pickers, research forms, and registered trial lookup reuse the same three research handlers as the existing slash commands. All query results remain **private** to the member; the public panel does not expose a member's medical questions. A 15-second per-member panel cooldown and the existing shared backend concurrency cap reduce API abuse. Menus timeout after three minutes; members may reopen them from the permanent panel.
+The panel stays usable across bot restarts through stable persistent component IDs registered in setup_hook. Any member may press **Ask the Doctor**, **Explore Topics**, **Cannabinoids**, **Find Strains**, **Research Library**, or **Help & Safety**. Topic and molecule pickers, research forms, and registered trial lookup reuse the same three research handlers as the existing slash commands. All query results remain **private** to the member; the public panel does not expose a member's medical questions. A 15-second per-member panel cooldown and the existing shared backend concurrency cap reduce API abuse. Menus timeout after three minutes; members may reopen them from the permanent panel.
 
 
 ## Phase 2: Verified public-health guides and research-design labels
@@ -136,3 +136,10 @@ The product is now **The Weed Doctor**, formerly **The 420 Lab**. The legacy Git
 The default public panel and owner dashboard now use The Weed Doctor. Existing default public panel messages are refreshed when their buttons are clicked (where the bot can edit its own messages). Custom-branded panels are not overwritten; a server manager can update one with `/doctorpanelupdate` and the message link. The term *Doctor* is branding, not a claim of being a medical professional.
 
 Discord's application name and bot account username must also be changed by the application owner in the Discord Developer Portal to rename the account itself. These account-level names do not change from a GitHub code deployment.
+
+
+## Strain lookup: member instructions
+
+Members have **two obvious routes**: type `/strains` and fill in the **name** argument (for example, Northern Lights), or press **🌱 Find Strains** directly on the persistent public panel and enter the name in the form. The original `/strain` command and the strain lookup inside Research Library remain available as backwards-compatible alternatives. Results are private and display up to five closest matches from the **2017** historical MIT-licensed index, not today's verified product chemistry or clinical effects.
+
+Existing public panels are automatically upgraded to show the new button after their next interaction, without overwriting custom titles and introductions. The old five button identifiers remain stable and the new sixth button uses a persistent ID.

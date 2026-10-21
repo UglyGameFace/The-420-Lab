@@ -1,5 +1,6 @@
 """Restart-safe public research panel with private answers."""
 from __future__ import annotations
+import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING
@@ -54,7 +55,8 @@ def panel_embed(title: str | None = None, intro: str | None = None,
     embed.add_field(name="🧠 Ask the Doctor", value="Enter your own question about effects or science.", inline=False)
     embed.add_field(name="📚 Explore Topics", value="Benefits, risks, anxiety, sleep, tolerance and more.", inline=False)
     embed.add_field(name="🧬 Cannabinoids", value="THC, CBD, CBG, CBN, THCA: sourced chemical facts.", inline=False)
-    embed.add_field(name="🔬 Research Library", value="Search scientific articles and trial registrations.", inline=False)
+    embed.add_field(name="🌱 Find Strains", value="Tap **Find Strains**, or use **/strains** and enter a name such as Northern Lights.", inline=False)
+    embed.add_field(name="🔬 Research Library", value="PubMed, clinical trials, FDA reports, and official guides.", inline=False)
     embed.set_footer(text="Answers are private • Evidence, not hype • Not a medical professional")
     return embed
 
@@ -162,9 +164,9 @@ class FDAProductSelect(discord.ui.Select):
 
 class StrainQueryModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="Historical Strain Reference", timeout=300)
+        super().__init__(title="Find a Cannabis Strain", timeout=300)
         self.search_term = discord.ui.TextInput(
-            label="Search strain names", placeholder="Try: Northern Lights",
+            label="Enter a strain name", placeholder="Example: Northern Lights",
             min_length=2, max_length=60)
         self.add_item(self.search_term)
 
@@ -276,24 +278,46 @@ class LabPanelView(discord.ui.View):
     def __init__(self, bot: LabBot):
         super().__init__(timeout=None)
         self.bot = bot
+        self._refresh_pending: set[int] = set()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Rebrand a legacy default panel when somebody uses it; never overwrite custom titles."""
+        """Preserve custom branding and quietly upgrade older posted panels."""
         message = interaction.message
         if (
             message is not None
             and self.bot.user is not None
             and message.author.id == self.bot.user.id
-            and message.embeds
-            and message.embeds[0].title == "🌿 THE 420 LAB | Cannabis Science Desk"
         ):
-            try:
-                await message.edit(
-                    embed=panel_embed(), view=self,
-                    allowed_mentions=discord.AllowedMentions.none())
-            except discord.HTTPException:
-                log.warning("Unable to refresh a legacy Weed Doctor panel")
+            rows = getattr(message, "components", ())
+            controls = {
+                getattr(child, "custom_id", None)
+                for row in rows
+                for child in getattr(row, "children", ())
+            }
+            missing_strain = "the420lab:panel:v1:strain" not in controls
+            old_default = bool(
+                message.embeds and message.embeds[0].title == "🌿 THE 420 LAB | Cannabis Science Desk"
+            )
+            if (missing_strain or old_default) and message.id not in self._refresh_pending:
+                self._refresh_pending.add(message.id)
+                # Do not delay Discord's interaction acknowledgement to edit the old post.
+                asyncio.create_task(self._refresh_panel(message, old_default))
         return True
+
+    async def _refresh_panel(self, message: discord.Message, old_default: bool) -> None:
+        try:
+            opts = {
+                "view": self,
+                "allowed_mentions": discord.AllowedMentions.none(),
+            }
+            if old_default:
+                opts["embed"] = panel_embed()
+            await message.edit(**opts)
+        except discord.HTTPException:
+            log.warning("Could not add strain button to an earlier Weed Doctor panel")
+        finally:
+            self._refresh_pending.discard(message.id)
+
     @discord.ui.button(label="Ask the Doctor", emoji="🧠", style=discord.ButtonStyle.primary,
                        custom_id="the420lab:panel:v1:ask", row=0)
     async def ask(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -316,13 +340,18 @@ class LabPanelView(discord.ui.View):
         await interaction.response.send_message(
             "**Research Library:** PubMed research, clinical trials, agency guides, FDA reports and historical strain names.",
             view=LibraryMenu(self.bot, interaction.user.id), ephemeral=True)
+    @discord.ui.button(label="Find Strains", emoji="🌱", style=discord.ButtonStyle.success,
+                       custom_id="the420lab:panel:v1:strain", row=1)
+    async def find_strains(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(StrainQueryModal())
+
     @discord.ui.button(label="Help & Safety", emoji="ℹ️", style=discord.ButtonStyle.secondary,
                        custom_id="the420lab:panel:v1:help", row=1)
     async def help(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(title="The Weed Doctor • How to Use", color=discord.Color.from_rgb(18, 123, 82))
         embed.description = (
             "**Ask:** Type any science question.\n**Topics:** Choose a preset research question.\n"
-            "**Cannabinoids:** Explore PubChem chemistry.\n**Research:** Studies, advanced design filters, trials, guides, FDA reports and strain names.\n\n"
+            "**Cannabinoids:** Explore PubChem chemistry.\n**Find Strains:** Tap 🌱 Find Strains or enter `/strains` and a strain name, such as Northern Lights.\n"            "**Research:** Studies, advanced design filters, trials, guides, and FDA reports.\n\n"
             "Your responses are private. If enabled, Gemini receives your question and source excerpts; "
             "do not enter private health details. A paper or trial listing isn't proof of benefit. "
             "For severe symptoms, contact emergency services. This is an educational bot, not a physician.")
