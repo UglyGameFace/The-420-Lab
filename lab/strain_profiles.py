@@ -206,8 +206,8 @@ def database_embed():
                "read photos and community opinions on the original profile pages.\n"
                "**Lab reports:** [Cannlytics public results](" + CANNLYTICS_RESULTS
                + ") (sample-specific, not strain-wide potency).\n"
-               "**Photos:** [Wikimedia Commons](" + COMMONS_SEARCH
-               + ") (check individual image license).\n"
+               "**Photos:** Real credited [Wikimedia Commons](" + COMMONS_SEARCH
+               + ") CC0 photo by default; optional [Pexels](https://www.pexels.com/api/) images.\n"
                "**Community rating:** Optional, original ratings from this server."),
         inline=False)
     embed.set_footer(text="Names do not establish genetics, effects or lab potency • Source dates ≠ deployment date")
@@ -280,6 +280,10 @@ def source_directory_embed():
             "provides community review counts, profile photos and descriptions "
              "on its public profiles; source image links and availability "
             "must be confirmed before embedding third-party media. "
+            "A credited real cannabis-flower image now appears on strain cards: "
+            "[Wikimedia Commons](https://commons.wikimedia.org/wiki/File:CannabisBud.jpg) "
+            "CC0 by default, or [Pexels](https://www.pexels.com/api/) when configured. "
+            "The photo is labeled illustrative unless cultivar-specific origin is verified. "
             "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "
             "offers original image sources with individual credits. "
             "[Leafly](https://www.leafly.com/strains) has individual community "
