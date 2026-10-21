@@ -156,7 +156,7 @@ class RichProfilePictureTests(unittest.IsolatedAsyncioTestCase):
                    return_value=""):
             embed = await build_strain_profile(bot, "Northern Lights", 901)
         fields = {entry.name: entry.value for entry in embed.fields}
-        self.assertIn("Source-confirmed details & community reports", fields)
+        self.assertIn("🧬 Source-confirmed details & community reports", fields)
         self.assertIn("Flower & Freedom", fields["🧬 Source-confirmed details & community reports"])
         self.assertIsNone(embed.image.url)
 
