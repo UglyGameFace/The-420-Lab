@@ -423,6 +423,167 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
                     interaction, sid, confirmed_not_published=True)
             self.assertEqual(hub.item(22, sid)[8], "pending")
 
+    async def test_uncertain_upload_send_keeps_reservation_for_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            review = SimpleNamespace(
+                id=101, is_nsfw=lambda: True,
+                permissions_for=lambda _: SimpleNamespace(view_channel=False),
+                send=AsyncMock(side_effect=TimeoutError("response lost")))
+            interaction = SimpleNamespace(
+                guild_id=22, guild=SimpleNamespace(default_role=object(), me=object()),
+                user=SimpleNamespace(id=400, display_name="Grower"),
+                response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            photo = SimpleNamespace(size=350, read=AsyncMock(return_value=b"test-photo"))
+            with patch.object(bot, "growers", hub), \
+                 patch.object(bot, "admit_interaction", new_callable=AsyncMock, return_value=True), \
+                 patch("lab.grower_commands._configured_channels", return_value=(review, None, True)), \
+                 patch("lab.grower_commands._post_permissions", return_value=True), \
+                 patch("lab.grower_commands.photo_as_jpeg", return_value=b"sanitized-image"):
+                await bot.tree.get_command("growersubmit").callback(
+                    interaction, "Blue Dream", "flowering", photo, True)
+            with sqlite3.connect(store.path) as db:
+                records = db.execute(
+                    "SELECT id,status,review_message FROM grower_submissions").fetchall()
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0][1:], ("uploading", "0"))
+            embed = review.send.await_args.kwargs["embed"]
+            self.assertTrue(embed.footer.text.startswith(
+                f"Grower upload #{records[0][0]} | "))
+            self.assertIn("Do not resend", interaction.followup.send.await_args.args[0])
+
+    async def test_upload_confirmation_creates_pending_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            review = SimpleNamespace(
+                id=101, is_nsfw=lambda: True,
+                permissions_for=lambda _: SimpleNamespace(view_channel=False),
+                send=AsyncMock(return_value=SimpleNamespace(id=6001)))
+            interaction = SimpleNamespace(
+                guild_id=22, guild=SimpleNamespace(default_role=object(), me=object()),
+                user=SimpleNamespace(id=400, display_name="Grower"),
+                response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            photo = SimpleNamespace(size=350, read=AsyncMock(return_value=b"test-photo"))
+            with patch.object(bot, "growers", hub), \
+                 patch.object(bot, "admit_interaction", new_callable=AsyncMock, return_value=True), \
+                 patch("lab.grower_commands._configured_channels", return_value=(review, None, True)), \
+                 patch("lab.grower_commands._post_permissions", return_value=True), \
+                 patch("lab.grower_commands.photo_as_jpeg", return_value=b"sanitized-image"):
+                await bot.tree.get_command("growersubmit").callback(
+                    interaction, "Blue Dream", "flowering", photo, True)
+            self.assertEqual(len(hub.pending(22)), 1)
+            self.assertEqual(hub.pending(22)[0][4], "6001")
+            self.assertIn("awaiting staff review", interaction.followup.send.await_args.args[0])
+
+    async def test_recover_interrupted_upload_adopts_review_photo(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream",
+                                   "flowering", "Original photo", 101)
+            old = (datetime.now(timezone.utc) - timedelta(minutes=6)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            with sqlite3.connect(store.path) as db:
+                db.execute("UPDATE grower_submissions SET operation_utc=? WHERE id=?",
+                           (old, sid))
+            post = SimpleNamespace(
+                id=9001, author=SimpleNamespace(id=777),
+                embeds=[SimpleNamespace(footer=SimpleNamespace(
+                    text=f"Grower upload #{sid} | credited original photo"))])
+            class ReviewHistory:
+                def history(self, limit):
+                    self.limit = limit
+                    async def rows():
+                        yield post
+                    return rows()
+            review = ReviewHistory()
+            interaction = SimpleNamespace(
+                guild_id=22, response=SimpleNamespace(defer=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            with patch.object(bot, "growers", hub), \
+                 patch.object(type(bot), "user", new_callable=PropertyMock) as user, \
+                 patch("lab.grower_commands._saved_channel", new_callable=AsyncMock,
+                       return_value=review):
+                user.return_value = SimpleNamespace(id=777)
+                await bot.tree.get_command("growerrecover").callback(interaction, sid)
+            self.assertEqual(hub.item(22, sid)[8], "pending")
+            self.assertEqual(hub.item(22, sid)[6], "9001")
+            self.assertEqual(review.limit, 250)
+            self.assertIn("No duplicate", interaction.followup.send.await_args.args[0])
+
+    async def test_recover_upload_requires_manual_confirmation_before_discard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream",
+                                   "flowering", "Original photo", 101)
+            old = (datetime.now(timezone.utc) - timedelta(minutes=6)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            with sqlite3.connect(store.path) as db:
+                db.execute("UPDATE grower_submissions SET operation_utc=? WHERE id=?",
+                           (old, sid))
+            class EmptyReview:
+                def history(self, limit):
+                    async def rows():
+                        if False:
+                            yield None
+                    return rows()
+            interaction = SimpleNamespace(
+                guild_id=22, response=SimpleNamespace(defer=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            with patch.object(bot, "growers", hub), \
+                 patch("lab.grower_commands._saved_channel", new_callable=AsyncMock,
+                       return_value=EmptyReview()):
+                await bot.tree.get_command("growerrecover").callback(interaction, sid)
+                self.assertEqual(hub.item(22, sid)[8], "uploading")
+                self.assertIn("entire original channel", interaction.followup.send.await_args.args[0])
+                await bot.tree.get_command("growerrecover").callback(
+                    interaction, sid, confirmed_not_published=True)
+            self.assertIsNone(hub.item(22, sid))
+
+    async def test_ambiguous_gallery_send_keeps_review_locked_for_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream",
+                                   "flowering", "Original photo", 101)
+            hub.finish_upload(22, sid, 301)
+            review = SimpleNamespace(
+                is_nsfw=lambda: True,
+                permissions_for=lambda _: SimpleNamespace(view_channel=False),
+                fetch_message=AsyncMock(return_value=SimpleNamespace(
+                    author=SimpleNamespace(id=777),
+                    attachments=[SimpleNamespace(to_file=AsyncMock(return_value=b"photo"))])))
+            gallery = SimpleNamespace(
+                id=102, is_nsfw=lambda: True,
+                send=AsyncMock(side_effect=TimeoutError("unknown publish result")))
+            interaction = SimpleNamespace(
+                guild_id=22, guild=SimpleNamespace(default_role=object(),me=object()),
+                response=SimpleNamespace(defer=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            with patch.object(bot, "growers", hub), \
+                 patch.object(type(bot), "user", new_callable=PropertyMock) as user, \
+                 patch("lab.grower_commands._saved_channel", new_callable=AsyncMock,
+                       return_value=review), \
+                 patch("lab.grower_commands._configured_channels",
+                       return_value=(review, gallery, True)), \
+                 patch("lab.grower_commands._post_permissions", return_value=True):
+                user.return_value = SimpleNamespace(id=777)
+                await bot.tree.get_command("growerreview").callback(
+                    interaction, sid, True)
+            self.assertEqual(hub.item(22, sid)[8], "reviewing")
+            self.assertEqual(hub.item(22, sid)[10], "102")
+            self.assertIn("/growerrecover", interaction.followup.send.await_args.args[0])
+
     async def test_no_consent_does_not_read_or_upload_attachment(self):
         command = bot.tree.get_command("growersubmit")
         photo = SimpleNamespace(size=500, read=AsyncMock())
