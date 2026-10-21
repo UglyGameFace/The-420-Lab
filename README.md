@@ -484,17 +484,23 @@ Members cannot post directly into the gallery through this feature.
   own storage only for as long as their messages exist, subject to Discord's
   data handling and caches.
 
-**Restart safety:** If an approval or deletion was interrupted for more than
-five minutes, `/growerqueue` identifies the stalled submission. Managers use
-`/growerrecover id:` to finish deletions or find and adopt a previously
-published gallery post by its bot-authored submission marker. If no gallery
-post is found in the last 250 messages, **do not assume it was never sent**:
-search the original gallery manually, then run
-`/growerrecover id: confirmed_not_published:true` only after confirming that
-there is no published copy. This safely returns the submission to review.
-Existing SQLite records gain an operation timestamp with an in-place migration.
-The user can also retry a stalled withdrawal after five minutes, without
-requiring the manager to repost an image.
+**Restart safety:** Photo submissions now reserve a permanent submission ID
+in SQLite **before sending the image to Discord**. The private review photo
+includes an upload-ID marker. A lost Discord acknowledgment or bot crash leaves
+an `uploading` reservation rather than an untracked image. The affected
+contributor must **not reupload** until staff reconcile the reservation.
+
+If an upload, approval or deletion is interrupted for more than five minutes,
+`/growerqueue` lists it. Managers run `/growerrecover id:` to inspect the
+original review/gallery channel for its bot-authored ID marker and attach the
+existing message to the saved record. The bot does not blindly repost.
+For unmatched uploads, staff must check the **entire original review channel**
+before using `/growerrecover id: confirmed_not_published:true` to clear the
+reservation. For unmatched approvals, the same option returns the submission
+to the private review queue only after confirming no published gallery copy
+exists. The automatic scan checks up to 250 recent messages, which is not
+proof that an earlier post is absent. Stalled removals can be retried without
+reposting an image.
 
 **Moderation:** `/growerqueue` gives managers pending photo IDs and private
 review links. `/growerreview id: approve:true/false` publishes the sanitized
