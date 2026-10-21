@@ -100,3 +100,7 @@ User reported strain discovery and instructions were unclear. Added a prominent 
 ## Command name collision correction
 
 The owner reported Idle Grow Op already owns `/strain` for gameplay. To avoid clashing with their game bot, removed The Weed Doctor `/strain` and `/strains` commands and registered only `/straininfo name` for the historical strain reference. Updated onboarding, embed, help, tests and documentation. Preserved the public 🌱 Find Strains panel button and its stable custom ID `the420lab:panel:v1:strain`. Fixed an inadvertently un-awaited async test by moving it into an `IsolatedAsyncioTestCase`. Verify global Discord sync, CI and Discloud deployment; the original Idle Grow Op application is untouched.
+
+## Channel panel pinning option (2026-10-20)
+
+Added optional per-panel `pin` flag to /doctorpanel, /labpanel, /doctorpanelupdate and /labpanelupdate. New panels default to unpinned; managers can opt in. Existing panel pin changes preserve the embed if no style parameters were supplied, so channel-specific branding is not overwritten. The bot requires Discord Pin Messages permission or equivalent, catches pin/unpin failures, and keeps existing persistent component IDs. No automatic repost/sticky mode was added, as Discord pins do not float above chat messages and reposting would cause noise and rate-limit risk.

@@ -327,13 +327,14 @@ async def papers(interaction: discord.Interaction, topic: app_commands.Range[str
     title="Optional panel title (up to 75 characters)",
     intro="Optional short welcome line (up to 240 characters)",
     theme="Panel accent color",
-    preview="Show the panel to only yourself instead of publishing")
+    preview="Show the panel to only yourself instead of publishing",
+    pin="Optional: add the published panel to channel Pinned Messages")
 @app_commands.choices(theme=[
     app_commands.Choice(name=name.capitalize(), value=name) for name in PANEL_THEMES
 ])
 async def labpanel(interaction: discord.Interaction, title: str | None = None,
                    intro: str | None = None, theme: str = "forest",
-                   preview: bool = False):
+                   preview: bool = False, pin: bool = False):
     """Only server managers may publish a panel. Members may use its buttons."""
     bot.health.record("panel")
     if interaction.guild is None or interaction.channel is None:
@@ -358,7 +359,21 @@ async def labpanel(interaction: discord.Interaction, title: str | None = None,
         await interaction.followup.send("Could not post the panel. Check my channel permissions.",
                                         ephemeral=True)
         return
-    await interaction.followup.send(f"Public panel published: {posted.jump_url}", ephemeral=True)
+    pin_message = ""
+    if pin:
+        try:
+            await posted.pin(reason="Server manager requested pinned Weed Doctor research panel")
+            pin_message = " • Added to channel pins."
+        except discord.HTTPException:
+            logger.warning("Published panel, but pinning failed guild=%s channel=%s",
+                           interaction.guild_id, interaction.channel_id)
+            pin_message = (
+                " • Could not pin it. Give me **Pin Messages** permission"
+                " (or Manage Messages where required), or pin it manually."
+            )
+    await interaction.followup.send(
+        f"Public panel published: {posted.jump_url}" + pin_message,
+        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 def extract_panel_message_id(value: str, guild_id: int, channel_id: int) -> int | None:
@@ -380,13 +395,14 @@ def extract_panel_message_id(value: str, guild_id: int, channel_id: int) -> int 
 @app_commands.checks.has_permissions(manage_guild=True)
 @app_commands.describe(
     message_link="Copy Message Link on the existing panel (or its message ID)",
-    title="Updated title", intro="Updated short introduction", theme="New accent color")
+    title="Updated title", intro="Updated short introduction", theme="New accent color",
+    pin="Optional: true pins the panel; false removes its pin")
 @app_commands.choices(theme=[
     app_commands.Choice(name=name.capitalize(), value=name) for name in PANEL_THEMES
 ])
 async def labpanelupdate(interaction: discord.Interaction, message_link: str,
                          title: str | None = None, intro: str | None = None,
-                         theme: str = "forest"):
+                         theme: str | None = None, pin: bool | None = None):
     if interaction.guild is None or interaction.channel is None:
         await interaction.response.send_message("Use this inside a server text channel.", ephemeral=True)
         return
@@ -409,17 +425,39 @@ async def labpanelupdate(interaction: discord.Interaction, message_link: str,
         if not any(cid.startswith("the420lab:panel:v1:") for cid in ids):
             await interaction.followup.send("That isn't a The Weed Doctor panel message.", ephemeral=True)
             return
-        await message.edit(
-            embed=panel_embed(title, intro, theme),
-            view=LabPanelView(bot), allowed_mentions=discord.AllowedMentions.none())
+        # Pin-only updates must preserve all existing custom branding.
+        edit_kwargs = {
+            "view": LabPanelView(bot),
+            "allowed_mentions": discord.AllowedMentions.none(),
+        }
+        if title is not None or intro is not None or theme is not None:
+            edit_kwargs["embed"] = panel_embed(title, intro, theme or "forest")
+        await message.edit(**edit_kwargs)
     except discord.HTTPException:
         logger.exception("Unable to update Weed Doctor panel message")
         await interaction.followup.send(
             "Can't edit that panel. I may need Read Message History and Send Messages here.",
             ephemeral=True)
         return
+    pin_notice = ""
+    if pin is not None:
+        try:
+            if pin and not message.pinned:
+                await message.pin(reason="Server manager enabled Weed Doctor panel pinning")
+                pin_notice = " Added to channel Pinned Messages."
+            elif not pin and message.pinned:
+                await message.unpin(reason="Server manager disabled Weed Doctor panel pinning")
+                pin_notice = " Removed from channel pins."
+            else:
+                pin_notice = " Pin status was already correct."
+        except discord.HTTPException:
+            pin_notice = (" Pin change failed. Give me Pin Messages"
+                          " permission (or Manage Messages where required).")
+            logger.warning("Could not change panel pin guild=%s channel=%s",
+                           interaction.guild_id, interaction.channel_id)
     await interaction.followup.send(
-        "Panel style updated. All existing buttons remain usable.", ephemeral=True)
+        "Panel updated. All existing buttons remain usable." + pin_notice,
+        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="labcontrol", description="Application-owner control panel for AI usage and safe limits")
@@ -467,14 +505,16 @@ async def labhealth(interaction: discord.Interaction):
 @app_commands.checks.has_permissions(manage_guild=True)
 @app_commands.describe(
     title="Optional panel title", intro="Optional short introduction",
-    theme="Panel accent color", preview="Show only yourself before posting")
+    theme="Panel accent color", preview="Show only yourself before posting",
+    pin="Optional: save this panel in the channel pins")
 @app_commands.choices(theme=[
     app_commands.Choice(name=name.capitalize(), value=name) for name in PANEL_THEMES
 ])
 async def doctorpanel(interaction: discord.Interaction, title: str | None = None,
                       intro: str | None = None, theme: str = "forest",
-                      preview: bool = False):
-    await labpanel.callback(interaction, title=title, intro=intro, theme=theme, preview=preview)
+                      preview: bool = False, pin: bool = False):
+    await labpanel.callback(
+        interaction, title=title, intro=intro, theme=theme, preview=preview, pin=pin)
 
 
 @bot.tree.command(name="doctorpanelupdate", description="Edit a posted Weed Doctor research panel")
@@ -483,15 +523,17 @@ async def doctorpanel(interaction: discord.Interaction, title: str | None = None
 @app_commands.checks.has_permissions(manage_guild=True)
 @app_commands.describe(
     message_link="Panel message URL or ID in this channel",
-    title="Updated title", intro="Updated introduction", theme="Accent color")
+    title="Updated title", intro="Updated introduction", theme="Accent color",
+    pin="Optional: pin or unpin the panel in this channel")
 @app_commands.choices(theme=[
     app_commands.Choice(name=name.capitalize(), value=name) for name in PANEL_THEMES
 ])
 async def doctorpanelupdate(interaction: discord.Interaction, message_link: str,
                             title: str | None = None, intro: str | None = None,
-                            theme: str = "forest"):
+                            theme: str | None = None, pin: bool | None = None):
     await labpanelupdate.callback(
-        interaction, message_link=message_link, title=title, intro=intro, theme=theme)
+        interaction, message_link=message_link, title=title, intro=intro,
+        theme=theme, pin=pin)
 
 
 @bot.tree.command(name="doctorcontrol", description="Weed Doctor app-owner AI and safety limits")

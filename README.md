@@ -148,3 +148,12 @@ Existing public panels are automatically upgraded to show the new button after t
 ### Avoiding a game command collision
 
 Idle Grow Op uses the `/strain` game command, so **The Weed Doctor only registers `/straininfo`** for informational lookup. The interactive **🌱 Find Strains** button remains on the public research panel. The Weed Doctor's older `/strain` and `/strains` aliases were retired; these do not affect the separate Idle Grow Op bot. Existing panel custom IDs remain stable.
+
+
+## Channel panel visibility and pinning
+
+To publish a panel and add it to channel pins, a server manager runs `/doctorpanel pin:true`. Pinning is **optional**: `pin:false` (default) publishes normally. A preview never pins. Existing panels can be pinned or unpinned without changing their branding: use `/doctorpanelupdate message_link:<link> pin:true` or `pin:false`. These commands also work with the legacy `/labpanel` and `/labpanelupdate` aliases.
+
+The bot needs Discord's **Pin Messages** permission (or Manage Messages on versions that require it). A failed pin operation does not delete the panel; its ephemeral confirmation explains the permission problem. Only members with Manage Server may publish or update panels.
+
+**Discord limitation:** Pinning saves a message in Pinned Messages, not in a fixed header above conversation. In active chat it will still scroll away. For permanently obvious navigation, consider a dedicated read-only #start-here or #weed-doctor channel with the pinned panel and a channel topic linking to it. Automatic sticky reposting is intentionally NOT enabled because it would generate spam and API load.
