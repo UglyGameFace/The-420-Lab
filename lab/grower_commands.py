@@ -48,7 +48,7 @@ def _post_permissions(channel: discord.TextChannel, member: discord.Member) -> b
 
 
 def _submission_card(byline: str, strain: str, stage: str, caption: str,
-                     *, approved: bool) -> discord.Embed:
+                     *, approved: bool, submission_id: int | None = None) -> discord.Embed:
     card = discord.Embed(
         title=f"🌿 {strain[:65]} | Grower Showcase" if approved else "🌱 Grower photo awaiting review",
         color=0x127B52,
@@ -59,8 +59,9 @@ def _submission_card(byline: str, strain: str, stage: str, caption: str,
     if caption:
         card.add_field(name="Grow notes", value=caption[:220], inline=False)
     card.set_image(url="attachment://grower.jpg")
+    marker = f"Grower submission #{submission_id} | " if approved and submission_id else ""
     card.set_footer(text=(
-        "Member-submitted identification, not genetically verified. "
+        marker + "Member-submitted identification, not genetically verified. "
         "Original photo shared with this server by its contributor."
     ))
     return card
@@ -92,7 +93,10 @@ async def _remove_submission(interaction: discord.Interaction, bot, submission_i
             await _remove_message(review, int(row[6]), bot)
         hub.delete(interaction.guild_id, submission_id, "removing")
     except Exception:
-        hub.unlock(interaction.guild_id, submission_id, row[8])
+        # A restart may resume a partially completed removal. Keep its durable
+        # state on a retry failure; otherwise return the original state.
+        if row[8] in ("pending", "approved"):
+            hub.unlock(interaction.guild_id, submission_id, row[8])
         raise
 
 
@@ -219,6 +223,11 @@ def register_grower_commands(bot) -> None:
                     f"· [Review photo](https://discord.com/channels/{interaction.guild_id}/"
                     f"{channel_id}/{message_id})"
                     for eid, byline, strain, stage, message_id, channel_id in entries]
+            interrupted = bot.growers.interrupted(interaction.guild_id)
+            if interrupted:
+                rows.append("**Interrupted operations:** " + ", ".join(
+                    f"#{number} ({status})" for number, status in interrupted)
+                    + ". Staff: use /growerrecover.")
             result = "\n".join(rows) if rows else "No pending grower photos."
         except Exception:
             log.exception("Grower queue failed")
@@ -248,6 +257,14 @@ def register_grower_commands(bot) -> None:
                     if review is None:
                         raise ValueError("The review photo's channel was deleted.")
                     _, gallery, _ = _configured_channels(interaction, hub)
+                    if not gallery.is_nsfw() or not review.is_nsfw():
+                        raise ValueError("Both showcase channels must remain age-restricted.")
+                    if review.permissions_for(interaction.guild.default_role).view_channel:
+                        raise ValueError("The staff review channel is no longer private.")
+                    member = interaction.guild.me
+                    if not member or not _post_permissions(gallery, member):
+                        raise ValueError("The bot no longer has gallery publishing permissions.")
+                    hub.prepare_review(interaction.guild_id, id, gallery.id)
                     review_message = await review.fetch_message(int(item[6]))
                     if not review_message.attachments or review_message.author.id != bot.user.id:
                         raise ValueError("The original review photo is missing.")
@@ -255,7 +272,7 @@ def register_grower_commands(bot) -> None:
                         filename="grower.jpg")
                     gallery_message = await gallery.send(
                         embed=_submission_card(item[2], item[3], item[4], item[5],
-                                               approved=True),
+                                               approved=True, submission_id=id),
                         file=attachment, allowed_mentions=NO_MENTIONS)
                     try:
                         hub.approve(interaction.guild_id, id, gallery_message.id, gallery.id)
@@ -286,6 +303,64 @@ def register_grower_commands(bot) -> None:
         await interaction.followup.send(
             f"Submission **#{id}** {'approved and posted' if approve else 'rejected and deleted'}.",
             ephemeral=True, allowed_mentions=NO_MENTIONS)
+
+    @bot.tree.command(name="growerrecover", description="Manager: reconcile an interrupted photo review or removal")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.describe(id="Interrupted submission number from /growerqueue",
+                           confirmed_not_published="Only after manually confirming no gallery post exists")
+    async def growerrecover(interaction: discord.Interaction, id: int,
+                            confirmed_not_published: bool = False):
+        if id < 1:
+            await interaction.response.send_message("Use a valid submission number.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        hub = bot.growers
+        try:
+            item = hub.item(interaction.guild_id, id)
+            if not item:
+                message = "That submission no longer exists."
+            elif item[8] == "removing":
+                await _remove_submission(interaction, bot, id, user_id=None)
+                message = f"Interrupted removal for **#{id}** resumed and the entry was erased."
+            elif item[8] != "reviewing":
+                message = f"Submission **#{id}** is **{item[8]}**. No recovery is needed."
+            elif not hub.review_is_interrupted(interaction.guild_id, id):
+                message = "That review is still active. Wait at least five minutes before recovery."
+            else:
+                found = []
+                if item[10]:
+                    gallery = await _saved_channel(interaction, item[10])
+                    if gallery is not None:
+                        marker = f"Grower submission #{id} | "
+                        async for post in gallery.history(limit=250):
+                            if (post.author.id == bot.user.id
+                                    and any((embed.footer.text or "").startswith(marker)
+                                            for embed in post.embeds)):
+                                found.append(post)
+                if len(found) > 1:
+                    message = ("More than one matching gallery post exists. Do not republish; "
+                               "remove duplicates manually and retry recovery.")
+                elif len(found) == 1:
+                    hub.approve(interaction.guild_id, id, found[0].id, int(item[10]))
+                    message = f"Recovered **#{id}** from its existing gallery post. No duplicate created."
+                elif confirmed_not_published:
+                    hub.requeue_interrupted_review(interaction.guild_id, id)
+                    message = (f"Submission **#{id}** returned to the staff review queue. "
+                               "No new gallery post was created.")
+                else:
+                    message = ("No identified gallery post was found in the most recent 250 "
+                               "messages of the saved gallery. Check the **entire** gallery "
+                               "manually before retrying with confirmed_not_published:true. "
+                               "The submission remains locked to prevent duplicate publication.")
+        except ValueError as exc:
+            message = str(exc)
+        except Exception:
+            log.exception("Grower recovery failed")
+            message = "Recovery failed; no success has been confirmed. Review bot permissions and logs."
+        await interaction.followup.send(message, ephemeral=True,
+                                        allowed_mentions=NO_MENTIONS)
 
     @bot.tree.command(name="growerprofile", description="See your showcase milestones and photo contributions")
     @app_commands.guild_only()
