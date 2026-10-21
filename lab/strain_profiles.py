@@ -196,7 +196,9 @@ def database_embed():
                "the source datasets were updated."),
         inline=False)
     embed.add_field(name="Detail sources",
-        value=("**Community descriptions and photos:** Leafly original pages; "
+        value=("**Live botanical context:** [CannaLib](https://cannalib.org/api/) " 
+               "(read-only attributed lookup; separate from our local count).\n"
+               "**Community descriptions and photos:** Leafly original pages; "
                "only permission-cleared content is shown inside Discord.\n"
                "**Lab reports:** [Cannlytics public results](" + CANNLYTICS_RESULTS
                + ") (sample-specific, not strain-wide potency).\n"
