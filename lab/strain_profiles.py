@@ -270,7 +270,7 @@ def source_directory_embed():
             "also offers community review counts, images and descriptions "
             "on its public profiles; image re-use rights and API stability "
             "must be confirmed before embedding third-party media. "
-            "            "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "
+            "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "
             "may provide reusable images, but each photo has its **own** license. "
             "[Leafly](https://www.leafly.com/strains) has individual community "
             "profiles; proprietary media/reviews aren't imported. The app owner "
