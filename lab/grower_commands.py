@@ -262,6 +262,7 @@ def register_grower_commands(bot) -> None:
         hub = bot.growers
         review_message = None
         gallery_message = None
+        publication_uncertain = False
         try:
             item = hub.lock(interaction.guild_id, id, purpose="review")
             try:
@@ -283,6 +284,9 @@ def register_grower_commands(bot) -> None:
                         raise ValueError("The original review photo is missing.")
                     attachment = await review_message.attachments[0].to_file(
                         filename="grower.jpg")
+                    # A network error may occur after Discord accepted the post.
+                    # Keep the durable review lock until staff reconcile it.
+                    publication_uncertain = True
                     gallery_message = await gallery.send(
                         embed=_submission_card(item[2], item[3], item[4], item[5],
                                                approved=True, submission_id=id),
@@ -293,6 +297,7 @@ def register_grower_commands(bot) -> None:
                         try:
                             await gallery_message.delete()
                             gallery_message = None
+                            publication_uncertain = False
                         except discord.HTTPException:
                             log.exception("Review publication needs manual reconciliation for #%s", id)
                         raise
@@ -301,7 +306,7 @@ def register_grower_commands(bot) -> None:
                         await _remove_message(review, int(item[6]), bot)
                     hub.delete(interaction.guild_id, id, "reviewing")
             except Exception:
-                if gallery_message is None:
+                if not publication_uncertain:
                     hub.unlock(interaction.guild_id, id, "pending")
                 raise
         except ValueError as exc:
@@ -310,8 +315,9 @@ def register_grower_commands(bot) -> None:
         except Exception:
             log.exception("Grower review failed")
             await interaction.followup.send(
-                "Review failed. Verify channels and retry. If already posted publicly, "
-                "avoid approving twice and contact the application owner.", ephemeral=True)
+                "Review could not be confirmed. Do not approve it again immediately. "
+                "If the request interrupted, staff can use /growerqueue and "
+                "/growerrecover after five minutes.", ephemeral=True)
             return
         await interaction.followup.send(
             f"Submission **#{id}** {'approved and posted' if approve else 'rejected and deleted'}.",
