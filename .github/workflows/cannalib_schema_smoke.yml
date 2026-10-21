@@ -1,0 +1,47 @@
+name: One-time CannaLib public schema smoke
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/cannalib_schema_smoke.yml
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Check one documented anonymous strain query, no credential required
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from urllib.request import Request, urlopen
+          url = "https://api.cannalib.org/v1/catalogs/strains?q=blue%20dream&limit=2"
+          request = Request(url, headers={
+              "Accept": "application/json",
+              "User-Agent": "The Weed Doctor educational source check/1.0",
+          })
+          with urlopen(request, timeout=12) as resp:
+              print("HTTP", resp.status, "type", resp.headers.get("Content-Type"))
+              data = json.loads(resp.read(128000))
+          print("Top-level type:", type(data).__name__)
+          if isinstance(data, dict):
+              print("Fields:", sorted(data.keys())[:25])
+              records = next((data[key] for key in ("data", "results", "strains", "items")
+                              if isinstance(data.get(key), list)), [])
+          elif isinstance(data, list):
+              records = data
+          else:
+              records = []
+          if isinstance(records, dict):
+              print("Nested fields:", sorted(records.keys())[:25])
+              records = next((records[key] for key in ("items", "results", "data", "strains")
+                              if isinstance(records.get(key), list)), [])
+          print("Rows:", len(records))
+          for row in records[:2]:
+              if isinstance(row, dict):
+                  print("Record name:", row.get("name"), "keys:", sorted(row.keys())[:25])
+          if not records:
+              raise SystemExit("Provider did not return a recognized result list")
+          PY
