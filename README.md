@@ -400,17 +400,15 @@ Source: https://www.findmyseeds.com/find-my-seeds-public-api/
 
 ## Credited real flower photos and optional Cannlytics
 
-**Available with no setup:** Weed Doctor strain cards now include an actual
-cannabis-bud photo taken by Thomas Elliott, from Wikimedia Commons (CC0).
-The picture is visibly marked as illustrative, NOT authenticated imagery of
-the particular strain requested. Original owner-curated cultivar photos
-still take priority over general illustrative images.
+**Available with no setup:** Named Weed Doctor strain cards now omit
+any unverified photo, rather than attaching one generic cannabis image to
+unrelated cultivars. Members may view original source profiles; attributed
+owner-supplied pictures appear only if explicitly provided for the exact name.
 
-**Optional Pexels:** Add PEXELS_API_KEY privately to enable actual
-photographs via Pexels' official API. Only cannabis-flower results with
-valid Pexels image and attribution URLs are accepted. The bot credits
-photographers, caches results for 6 hours, caches failures for 1 hour,
-uses the shared provider budget, and falls back to the CC0 photo.
+**Generic pictures:** Wikimedia Commons and the optional Pexels helper can
+provide credited cannabis-flower illustrations for non-cultivar materials,
+but these photos are no longer inserted into named strain profiles. Even a
+beautiful bud photograph cannot authenticate a strain by appearance alone.
 
 **Optional Cannlytics:** Add CANNLYTICS_API_KEY privately to enable
 read-only, exact-name requests to the documented
@@ -424,7 +422,7 @@ https://docs.cannlytics.com/api/data/strains/
 
 Live Pexels and Cannlytics calls have not been verified in the owner
 deployment because their respective secret API keys are not connected.
-Generic Commons photography is the built-in backup.
+Generic photo fallback is disabled for all named strain cards.
 
 
 ### Corrected strain profiles: photo and identity accuracy

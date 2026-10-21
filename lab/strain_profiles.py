@@ -207,7 +207,7 @@ def database_embed():
                "**Lab reports:** [Cannlytics public results](" + CANNLYTICS_RESULTS
                + ") (sample-specific, not strain-wide potency).\n"
                "**Generic flower photo sources (not used on named strain cards):** [Wikimedia Commons](" + COMMONS_SEARCH
-               + ") CC0 photo by default; optional [Pexels](https://www.pexels.com/api/) images.\n"
+               + ") illustrations may exist externally; named profiles do not embed unrelated stock.\n"
                "**Community rating:** Optional, original ratings from this server."),
         inline=False)
     embed.set_footer(text="Names do not establish genetics, effects or lab potency • Source dates ≠ deployment date")
@@ -282,7 +282,7 @@ def source_directory_embed():
             "must be confirmed before embedding third-party media. "
             "Generic photography is no longer auto-included on named strain cards: "
             "[Wikimedia Commons](https://commons.wikimedia.org/wiki/File:CannabisBud.jpg) "
-            "CC0 by default, or [Pexels](https://www.pexels.com/api/) when configured. "
+            "Original-source generic illustrations are not displayed as named cultivars. "
             "Only source-attributed exact-cultivar photos are eligible for the named profile. "
             "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "
             "offers original image sources with individual credits. "
