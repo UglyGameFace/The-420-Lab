@@ -464,6 +464,32 @@ uploads by running `/growerconfig` again with `enabled:false` and the same
 channels. Existing approved photos and owners' withdrawal rights remain.
 Members cannot post directly into the gallery through this feature.
 
+**Storage continuity gate (application owner):** New grower photo uploads are
+**disabled by default** until the bot owner verifies that the configured
+`LAB_STRAIN_DB_PATH` SQLite file survives a process change. Existing
+withdrawal, staff review, and recovery commands remain available, even if the
+storage proof has not yet been completed.
+
+1. Deploy the bot using the intended persistent writable SQLite path. In
+   Discord, run `/growerstorage action:arm` as the **application owner**.
+   This invalidates any earlier proof and temporarily pauses new uploads.
+2. Restart the **actual bot process**, without changing the database path.
+   Run `/growerstorage action:verify`. It succeeds only when the stored
+   checkpoint survives into a different process and SQLite quick_check passes.
+3. To test a **full Discloud redeployment**, run `action:arm` a second time,
+   redeploy with the exact same database path, and then run `action:verify`.
+   Also confirm existing staff queue and approved journal items still exist.
+   Restart continuity alone is **not** proof of redeploy continuity.
+4. Run `action:status` to check the saved state. All status messages are
+   private to the owner. Never interpret a successful check as proof of
+   automatic backups; separately verify a recoverable database backup.
+
+The gate uses `LAB_GROWER_REQUIRE_STORAGE_PROOF=true` (default if unset).
+Disabling it bypasses a real data-protection check and should only be done in
+a disposable staging deployment without member photographs. Managers can
+still configure their server while uploads are paused. The proof is tied to
+the existing database and does not store Discord user IDs, tokens or photos.
+
 **Contributor workflow:**
 - `/growersubmit` accepts an original JPEG, PNG or WebP photo (8 MiB maximum),
   an **exact catalog strain name**, a reported growth stage, optional progress
