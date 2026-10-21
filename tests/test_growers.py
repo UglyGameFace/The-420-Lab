@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from PIL import Image
 
@@ -181,6 +181,51 @@ class GrowerCommandsTests(unittest.TestCase):
 
 
 class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def test_withdraw_uses_original_channels_after_manager_reconfigures(self):
+        from lab.grower_commands import _remove_submission
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.submit(22, 400, "Grower", "Blue Dream", "flowering",
+                             "Original photo", 301, 101)
+            hub.lock(22, sid, purpose="review")
+            hub.approve(22, sid, 302, 102)
+            hub.configure(22, 201, 202)
+            interaction = SimpleNamespace(guild_id=22)
+            fake_bot = SimpleNamespace(growers=hub)
+            async def historical_channel(_interaction, cid):
+                return f"channel-{cid}"
+            with patch("lab.grower_commands._saved_channel", side_effect=historical_channel) as resolve, \
+                 patch("lab.grower_commands._remove_message", new_callable=AsyncMock) as remove:
+                await _remove_submission(interaction, fake_bot, sid, user_id=400)
+                self.assertEqual([call.args[1] for call in resolve.await_args_list],
+                                 ["102", "101"])
+                self.assertEqual([call.args[:2] for call in remove.await_args_list],
+                                 [("channel-102", 302), ("channel-101", 301)])
+                self.assertIsNone(hub.item(22, sid))
+
+    async def test_failed_removal_unwinds_state_for_retry(self):
+        from lab.grower_commands import _remove_submission
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.submit(22, 400, "Grower", "Blue Dream", "flowering",
+                             "Original photo", 301, 101)
+            hub.lock(22, sid, purpose="review")
+            hub.approve(22, sid, 302, 102)
+            interaction = SimpleNamespace(guild_id=22)
+            async def historical_channel(_interaction, cid):
+                return f"channel-{cid}"
+            with patch("lab.grower_commands._saved_channel", side_effect=historical_channel), \
+                 patch("lab.grower_commands._remove_message", new_callable=AsyncMock,
+                       side_effect=PermissionError("forbidden")):
+                with self.assertRaises(PermissionError):
+                    await _remove_submission(interaction, SimpleNamespace(growers=hub),
+                                             sid, user_id=400)
+            self.assertEqual(hub.item(22, sid)[8], "approved")
+
     async def test_no_consent_does_not_read_or_upload_attachment(self):
         command = bot.tree.get_command("growersubmit")
         photo = SimpleNamespace(size=500, read=AsyncMock())
