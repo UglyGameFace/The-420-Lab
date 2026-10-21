@@ -327,7 +327,7 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
                                  [("channel-102", 302), ("channel-101", 301)])
                 self.assertIsNone(hub.item(22, sid))
 
-    async def test_failed_removal_unwinds_state_for_retry(self):
+    async def test_ambiguous_delete_retains_recoverable_removal_state(self):
         from lab.grower_commands import _remove_submission
         with tempfile.TemporaryDirectory() as directory:
             store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
@@ -347,7 +347,17 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(PermissionError):
                     await _remove_submission(interaction, SimpleNamespace(growers=hub),
                                              sid, user_id=400)
-            self.assertEqual(hub.item(22, sid)[8], "approved")
+            self.assertEqual(hub.item(22, sid)[8], "removing")
+            with self.assertRaises(ValueError):
+                hub.lock(22, sid, purpose="remove", user_id=400)
+            aged = (datetime.now(timezone.utc) - timedelta(minutes=6)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            with sqlite3.connect(store.path) as db:
+                db.execute("UPDATE grower_submissions SET operation_utc=? WHERE id=?",
+                           (aged, sid))
+            hub.lock(22, sid, purpose="remove", user_id=400)
+            hub.delete(22, sid, "removing")
+            self.assertIsNone(hub.item(22, sid))
 
     async def test_recover_adopts_existing_gallery_post_without_republishing(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -548,6 +558,46 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
                 await bot.tree.get_command("growerrecover").callback(
                     interaction, sid, confirmed_not_published=True)
             self.assertIsNone(hub.item(22, sid))
+
+    async def test_rejection_removes_pending_using_same_durable_removal_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream",
+                                   "flowering", "Original photo", 101)
+            hub.finish_upload(22, sid, 301)
+            interaction = SimpleNamespace(
+                guild_id=22, response=SimpleNamespace(defer=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            with patch.object(bot, "growers", hub), \
+                 patch("lab.grower_commands._saved_channel",
+                       new_callable=AsyncMock, return_value="old-review"), \
+                 patch("lab.grower_commands._remove_message", new_callable=AsyncMock) as deleted:
+                await bot.tree.get_command("growerreview").callback(interaction, sid, False)
+            self.assertIsNone(hub.item(22, sid))
+            deleted.assert_awaited_once()
+            self.assertIn("rejected and deleted", interaction.followup.send.await_args.args[0])
+
+    async def test_rejection_refuses_to_delete_an_already_approved_photo(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.begin_upload(22, 400, "Grower", "Blue Dream",
+                                   "flowering", "Original photo", 101)
+            hub.finish_upload(22, sid, 301)
+            hub.lock(22, sid, purpose="review")
+            hub.approve(22, sid, 902, 102)
+            interaction = SimpleNamespace(
+                guild_id=22, response=SimpleNamespace(defer=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            with patch.object(bot, "growers", hub), \
+                 patch("lab.grower_commands._remove_message", new_callable=AsyncMock) as deleted:
+                await bot.tree.get_command("growerreview").callback(interaction, sid, False)
+            self.assertEqual(hub.item(22, sid)[8], "approved")
+            deleted.assert_not_awaited()
+            self.assertIn("already being processed", interaction.followup.send.await_args.args[0])
 
     async def test_ambiguous_gallery_send_keeps_review_locked_for_recovery(self):
         with tempfile.TemporaryDirectory() as directory:
