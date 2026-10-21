@@ -113,6 +113,11 @@ class StrainProfileStore:
                 updated_utc=excluded.updated_utc""",
                 (key, info, link, picture, rights, updated))
 
+    def remove_curated(self, name: str):
+        with closing(self._connect()) as db, db:
+            db.execute("DELETE FROM curated_profiles WHERE name_key=?",
+                       (compact(name),))
+
     def curated(self, name: str):
         with closing(self._connect()) as db:
             return db.execute(
@@ -124,6 +129,11 @@ class StrainProfileStore:
             db.execute("""INSERT INTO server_config VALUES(?,?)
                 ON CONFLICT(guild) DO UPDATE SET reviews_enabled=excluded.reviews_enabled""",
                 (str(guild_id), int(enabled)))
+
+    def clear_reviews(self, guild_id: int):
+        """Owner-requested hard deletion of this server's user vote history."""
+        with closing(self._connect()) as db, db:
+            db.execute("DELETE FROM strain_votes WHERE guild=?", (str(guild_id),))
 
     def reviews_enabled(self, guild_id: int) -> bool:
         with closing(self._connect()) as db:
