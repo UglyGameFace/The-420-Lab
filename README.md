@@ -476,10 +476,11 @@ Members cannot post directly into the gallery through this feature.
   by default, with `public:true` for voluntary sharing.
 - `/growerjournal` shows up to 12 linked, approved progress photos with
   reported growth stages, dates and captions. Optional `strain:` filters to
-  one catalog name and `public:true` lets a grower share their own journal.
+  one catalog name and `public:true` lets a grower share their own journal
+  in an age-restricted text channel.
 - `/growerwithdraw id:` removes the contributor's private submission copy,
   any public gallery copy and the stored entry. The submit confirmation
-  includes the ID; keep it to withdraw later. Images remain in Discord's
+  includes the ID, and private `/growerprofile` can recover recent IDs. Images remain in Discord's
   own storage only for as long as their messages exist, subject to Discord's
   data handling and caches.
 
