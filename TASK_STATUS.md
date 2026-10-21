@@ -139,3 +139,8 @@ descriptions/images plus opt-in first-party reviews. Review/photo storage
 persistence on Discloud remains to be verified. Live external CannaLib API
 response could not be directly observed from available tools; unit tests
 exercise documented schema with network mocks.
+
+
+## Additional independently sourced profiles
+
+Continued stalled work on the Weed Doctor strain-data system. Existing /straindb, /strainsources, /strainprofile, /doctorstrainset and optional first-party /strainreviews were already on main. Added a first-party/credited Flower & Freedom API lookup with exact-name checks, source update dates, one-hour process cache, strict response limits and global quota accounting. It falls back to existing CannaLib and StrainAPI. Source guide and public database card distinguish remote profile data from 30,582 local indexed names. External Find My Seeds and paid Strainpedia evaluated as possible review/image sources; do not imply rights to copy images or reviews. Need CI and host deployment confirmation.

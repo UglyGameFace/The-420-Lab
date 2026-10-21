@@ -373,3 +373,10 @@ copyrighted descriptions and images are NOT reproduced or claimed live.
 Dataset snapshots: Kushy 2017-11-14, CI-Strains-Pro 2026, undated
 historical Leafly-name supplement. Provider lookup freshness does not
 mean these packaged files automatically update on a schedule.
+
+
+## Independently sourced short strain descriptions (2026-10-20)
+
+The /strainprofile command now uses the read-only Flower & Freedom beta API before its existing CannaLib and StrainAPI fallback. Where an exact name matches, it displays a short original provider summary, reported genetics, aromas and effects, the upstream profile URL, and its actual source update date. It never converts a single product's lab test into an estimate for all products of that strain. The API currently advertises about 50 profiles and requires visible attribution, which is included. Only requested records are fetched, with a short bounded in-memory cache; no bulk mirroring and no new credentials. Toggle with FLOWER_FREEDOM_ENABLED=false if necessary. The existing /straindb database-size count includes **only packaged local name indexes**, not these 50 remote provider profiles, so the count remains accurate. The public source guide /strainsources also distinguishes these independently owned summaries from unlicensed Leafly descriptions and images.
+
+Other alternatives: Find My Seeds publishes a read-only strain API with community scores, review counts, and image fields, but individual third-party image rights still require verification before embedding; Strainpedia's private developer API advertises structured images and effect descriptions at $50/month. Neither option should be represented as a live Leafly data feed.

@@ -198,6 +198,8 @@ def database_embed():
     embed.add_field(name="Detail sources",
         value=("**Live botanical context:** [CannaLib](https://cannalib.org/api/) " 
                "(read-only attributed lookup; separate from our local count).\n"
+               "**Credited short descriptions:** [Flower & Freedom](https://flowerandfreedom.com/api/) "
+               "(free on-demand records; source-reported effects, exact update dates and sample context).\n"
                "**Alternative profiles:** [StrainAPI](https://www.strainapi.com/docs/) " 
                "(on-demand breeder, lineage and terpene fields, separate from name index).\n"
                "**Community descriptions and photos:** Leafly original pages; "
@@ -224,6 +226,17 @@ def source_directory_embed():
             "the same number of lab-tested profiles, photos, or current review pages."
         ),
         color=0x127B52)
+    embed.add_field(
+        name="🌼 Flower & Freedom | Original credited summaries",
+        value=(
+            "[Free read-only API](https://flowerandfreedom.com/api/) • "
+            "Now connected on demand before other botanical references, "
+            "with a one-hour bounded cache. About 50 published profiles "
+            "contain short original descriptions, reported aromas, "
+            "source update dates and sample-qualified laboratory context. "
+            "This is a smaller, independent dataset, not Leafly content. "
+            "No images or community review counts are included."
+        ), inline=False)
     embed.add_field(
         name="🧬 CannaLib | Source-attributed cultivar facts",
         value=(
@@ -253,7 +266,11 @@ def source_directory_embed():
     embed.add_field(
         name="📸 Pictures & reviewed descriptions",
         value=(
-            "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "
+            "[Find My Seeds API](https://www.findmyseeds.com/find-my-seeds-public-api/) "
+            "also offers community review counts, images and descriptions "
+            "on its public profiles; image re-use rights and API stability "
+            "must be confirmed before embedding third-party media. "
+            "            "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "
             "may provide reusable images, but each photo has its **own** license. "
             "[Leafly](https://www.leafly.com/strains) has individual community "
             "profiles; proprietary media/reviews aren't imported. The app owner "
