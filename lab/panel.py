@@ -59,16 +59,16 @@ def panel_embed(title: str | None = None, intro: str | None = None,
     embed.add_field(name="🧬 Cannabinoids", value="THC, CBD, CBG, CBN, THCA: sourced chemical facts.", inline=False)
     embed.add_field(name="🌱 Find Strains", value="Tap **Find Strains**, or use **/straininfo** and enter a name such as Northern Lights.", inline=False)
     embed.add_field(name="🔬 Research Library", value="PubMed, clinical trials, FDA reports, and official guides.", inline=False)
-    embed.add_field(
-        name="📊 Strain Database",
-        value=f"**{catalog_counts()['distinct']:,} distinct names** across three catalog sources. "
-              "Tap **Database Info** or use **/straindb** to see source dates, "
-              "detail providers, and update status.", inline=False)
     embed.add_field(name="📷 Grower Showcase (server opt-in)",
                     value="Submit original grow photos for review with **/growersubmit**. "
                           "Build a **/growerjournal**, earn community milestones, and "
                           "withdraw uploads any time. Managers start with **/growerconfig**.",
                     inline=False)
+    embed.add_field(
+        name="📊 Strain Database",
+        value=f"**{catalog_counts()['distinct']:,} distinct names** across three catalog sources. "
+              "Tap **Database Info** or use **/straindb** to see source dates, "
+              "detail providers, and update status.", inline=False)
     embed.set_footer(text="Answers are private • Centered selection pop-ups • Not a medical professional")
     return embed
 
