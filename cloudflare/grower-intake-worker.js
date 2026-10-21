@@ -5,6 +5,20 @@
  * Required secrets: GROWER_INTAKE_TOKEN; binding: INTAKE.
  */
 const LIMIT = 8 * 1024 * 1024;
+const TTL_MS = 30 * 60 * 1000;
+function expired(obj) {
+  const when = Number(obj?.customMetadata?.expires);
+  // Legacy/unmarked staged photos are not safe to retain indefinitely.
+  return !Number.isSafeInteger(when) || when <= Date.now();
+}
+async function liveObject(env, key, full) {
+  const obj = full ? await env.INTAKE.get(key) : await env.INTAKE.head(key);
+  if (!obj) return null;
+  if (!expired(obj)) return obj;
+  // Never serve an expired photo even if the scheduled cleanup is delayed.
+  await env.INTAKE.delete(key);
+  return null;
+}
 const KEY = /^photos\/[0-9]{1,20}\/[0-9]{1,20}\/[0-9a-f]{32}$/;
 const SOURCE_HOSTS = new Set(["cdn.discordapp.com", "media.discordapp.net"]);
 
@@ -53,7 +67,7 @@ export default {
       try {
         await env.INTAKE.put(key, fetched.body, {
           httpMetadata: { contentType: "application/octet-stream" },
-          customMetadata: { expires: String(Date.now() + 30 * 60 * 1000) }
+          customMetadata: { expires: String(Date.now() + TTL_MS) }
         });
         return deny(201, "Stored");
       } catch {
@@ -62,12 +76,12 @@ export default {
     }
     if (request.method === "HEAD") {
       return new Response(null, {
-        status: (await env.INTAKE.head(key)) ? 200 : 404,
+        status: (await liveObject(env, key, false)) ? 200 : 404,
         headers: { "Cache-Control": "no-store" }
       });
     }
     if (request.method === "GET") {
-      const obj = await env.INTAKE.get(key);
+      const obj = await liveObject(env, key, true);
       if (!obj) return deny(404, "Not found");
       return new Response(obj.body, {
         status: 200,
@@ -83,5 +97,19 @@ export default {
       return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
     }
     return deny(405, "Method not allowed");
+  },
+  async scheduled(_controller, env) {
+    // Bounded automatic sweep. Private R2 lifecycle is a 24-hour backstop,
+    // while this job aims to remove originals 30-35 minutes after intake.
+    let cursor;
+    do {
+      const page = await env.INTAKE.list({
+        prefix: "photos/", limit: 250, include: ["customMetadata"],
+        ...(cursor ? { cursor } : {})
+      });
+      const expiredKeys = page.objects.filter(expired).map(obj => obj.key);
+      if (expiredKeys.length) await env.INTAKE.delete(expiredKeys);
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
   }
 };

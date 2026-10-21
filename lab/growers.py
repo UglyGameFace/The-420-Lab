@@ -211,7 +211,7 @@ class GrowerHub:
             db.execute("BEGIN IMMEDIATE")
             pending = db.execute(
                 "SELECT COUNT(*) FROM grower_submissions "
-                "WHERE guild=? AND author_hash=? AND status IN ('pending','uploading')",
+                "WHERE guild=? AND author_hash=? AND status IN ('pending','uploading','queued')",
                 (str(guild_id), identity)).fetchone()[0]
             cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
                 "%Y-%m-%dT%H:%M:%SZ")
@@ -289,6 +289,35 @@ class GrowerHub:
         if not self.upload_is_interrupted(guild_id, submission_id):
             raise ValueError("The upload is not interrupted.")
         self.stage_confirmed(guild_id, submission_id)
+
+    def expire_queued(self):
+        """Expire only WAITING jobs after 30m. Never retry or erase in-flight posts.
+
+        The DB retains the contributor-scoped submission ID with 'expired',
+        while R2 cleanup stays retryable until its object is confirmed deleted.
+        """
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with closing(self.profiles._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            expired = db.execute(
+                """SELECT q.guild,q.submission FROM grower_stage_queue q
+                JOIN grower_submissions s
+                ON q.guild=s.guild AND q.submission=s.id
+                WHERE q.state='queued' AND s.status='queued' AND q.created_utc<=?""",
+                (cutoff,)).fetchall()
+            for guild, sid in expired:
+                db.execute(
+                    """UPDATE grower_stage_queue
+                    SET state='cleanup',changed_utc=?
+                    WHERE guild=? AND submission=? AND state='queued'""",
+                    (now, guild, sid))
+                db.execute(
+                    """UPDATE grower_submissions SET status='expired',operation_utc=''
+                    WHERE guild=? AND id=? AND status='queued'""",
+                    (guild, sid))
+            return len(expired)
 
     def claim_stage(self):
         """One durable queue claim; do not resubmit stale processing jobs blindly."""
@@ -471,7 +500,7 @@ class GrowerHub:
              purpose: str, user_id: int | None = None):
         if purpose not in ("review", "remove", "reject"):
             raise ValueError("Unsupported submission action")
-        allowed = ("pending",) if purpose in ("review", "reject") else ("pending", "approved", "queued")
+        allowed = ("pending",) if purpose in ("review", "reject") else ("pending", "approved", "queued", "expired")
         status = "reviewing" if purpose == "review" else "removing"
         with closing(self.profiles._connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
@@ -549,7 +578,7 @@ class GrowerHub:
             return db.execute(
                 """SELECT id,strain,status FROM grower_submissions
                 WHERE guild=? AND author_hash=?
-                AND status IN ('uploading','queued','pending','approved')
+                AND status IN ('uploading','queued','pending','approved','expired')
                 ORDER BY id DESC LIMIT 10""",
                 (str(guild_id), self._identity(guild_id, user_id))).fetchall()
 

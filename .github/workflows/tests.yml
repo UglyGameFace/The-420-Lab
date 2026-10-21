@@ -17,3 +17,8 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Syntax checks
         run: python -m compileall -q main.py lab tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Private R2 intake Worker tests
+        run: node --test tests/grower_worker.test.mjs
