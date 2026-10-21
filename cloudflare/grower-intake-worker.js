@@ -104,7 +104,8 @@ export default {
     let cursor;
     do {
       const page = await env.INTAKE.list({
-        prefix: "photos/", limit: 250, ...(cursor ? { cursor } : {})
+        prefix: "photos/", limit: 250, include: ["customMetadata"],
+        ...(cursor ? { cursor } : {})
       });
       const expiredKeys = page.objects.filter(expired).map(obj => obj.key);
       if (expiredKeys.length) await env.INTAKE.delete(expiredKeys);
