@@ -291,10 +291,27 @@ class StrainCatalogTests(unittest.TestCase):
         self.assertTrue(matches)
         self.assertLessEqual(len(matches), 5)
         output = result_text("Northern Lights")
-        self.assertIn("Historical", output)
+        self.assertIn("Strain Name Finder", output)
+        self.assertIn("2026", output)
         self.assertIn("2017", output)
         self.assertIn("do not reliably predict", output)
         self.assertNotIn("Pain relief", output)
+
+    def test_modern_cc_by_catalog_has_coverage_and_provenance(self):
+        from lab.strains import load_modern_catalog, find_matches
+        modern = load_modern_catalog()
+        self.assertGreaterEqual(len(modern), 19000)
+        matches = find_matches("Animal Face")
+        self.assertTrue(matches)
+        self.assertEqual(matches[0].name, "Animal Face")
+        self.assertIn("CI-Strains-Pro 2026", matches[0].sources)
+
+    def test_nearby_spelling_suggests_match_without_faking_exactness(self):
+        from lab.strains import find_matches, result_text
+        results = find_matches("Animel Face")
+        self.assertTrue(results)
+        self.assertTrue(results[0].approximate)
+        self.assertIn("spelling suggestions", result_text("Animel Face"))
 
     def test_lookup_does_not_allow_mass_mentions(self):
         from lab.strains import lookup, result_text
