@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from io import BytesIO
+from contextlib import closing
 import logging
 import os
 
@@ -88,6 +89,11 @@ async def _remove_submission(interaction: discord.Interaction, bot, submission_i
     row = hub.lock(interaction.guild_id, submission_id, purpose=purpose, user_id=user_id)
     deletion_started = False
     try:
+        stage = hub.stage_info(interaction.guild_id, submission_id)
+        if stage:
+            if bot.grower_intake is None:
+                raise ValueError("Private stage storage is unavailable; retry once configured.")
+            await bot.grower_intake.delete(stage[0])
         if row[7]:
             if not row[10]:
                 raise ValueError("The saved gallery channel is missing; contact staff.")
@@ -96,7 +102,7 @@ async def _remove_submission(interaction: discord.Interaction, bot, submission_i
                 deletion_started = True
                 await _remove_message(gallery, int(row[7]), bot)
         review = await _saved_channel(interaction, row[9])
-        if review:
+        if review and int(row[6]) > 0:
             deletion_started = True
             await _remove_message(review, int(row[6]), bot)
         hub.delete(interaction.guild_id, submission_id, "removing")
@@ -253,6 +259,40 @@ def register_grower_commands(bot) -> None:
         if not await bot.admit_interaction(interaction):
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
+        if os.getenv("LAB_GROWER_R2_QUEUE_ENABLED", "false").lower() in ("true", "1", "on"):
+            if bot.grower_intake is None:
+                await interaction.followup.send(
+                    "Private photo staging is not configured. No photo was accepted.",
+                    ephemeral=True)
+                return
+            try:
+                entry_id, stage_key = bot.growers.start_staged_upload(
+                    interaction.guild_id, interaction.user.id,
+                    byline, name, stage, caption, review.id)
+                # The Cloudflare Worker copies directly from Discord's signed
+                # attachment URL into private R2. We never photo.read() here.
+                await bot.grower_intake.stage(stage_key, photo.url, photo.size)
+                bot.growers.stage_confirmed(interaction.guild_id, entry_id)
+            except ValueError as exc:
+                await interaction.followup.send(str(exc), ephemeral=True)
+                return
+            except Exception:
+                log.exception("Grower R2 intake uncertain id=%s", locals().get("entry_id"))
+                notice = (
+                    f"Photo **#{entry_id}** intake could not be confirmed. Do not reupload. "
+                    "Staff can check /growerqueue and /growerrecover after five minutes."
+                    if "entry_id" in locals() else
+                    "Private image staging is unavailable. No queue slot was reserved.")
+                await interaction.followup.send(
+                    notice, ephemeral=True, allowed_mentions=NO_MENTIONS)
+                return
+            await interaction.followup.send(
+                f"Grow photo **#{entry_id}** safely queued for private staff review. "
+                "The bot processes photos individually, with temporary originals held "
+                "outside RAM. You can check /growerprofile or withdraw it with "
+                f"/growerwithdraw id:{entry_id}.",
+                ephemeral=True, allowed_mentions=NO_MENTIONS)
+            return
         slot_taken = False
         try:
             try:
@@ -312,6 +352,13 @@ def register_grower_commands(bot) -> None:
                     f"· [Review photo](https://discord.com/channels/{interaction.guild_id}/"
                     f"{channel_id}/{message_id})"
                     for eid, byline, strain, stage, message_id, channel_id in entries]
+            with closing(bot.growers.profiles._connect()) as db:
+                queued = db.execute(
+                    """SELECT COUNT(*) FROM grower_stage_queue
+                    WHERE guild=? AND state IN ('receiving','queued','processing')""",
+                    (str(interaction.guild_id),)).fetchone()[0]
+            if queued:
+                rows.append(f"**Private photos being staged/processed:** {queued}")
             interrupted = bot.growers.interrupted(interaction.guild_id)
             if interrupted:
                 rows.append("**Interrupted operations:** " + ", ".join(
@@ -435,30 +482,57 @@ def register_grower_commands(bot) -> None:
                 if not hub.upload_is_interrupted(interaction.guild_id, id):
                     message = "That upload is still active. Wait five minutes before recovery."
                 else:
-                    found = []
-                    review = await _saved_channel(interaction, item[9])
-                    if review is not None:
-                        marker = f"Grower upload #{id} | "
-                        async for post in review.history(limit=250):
-                            if (post.author.id == bot.user.id
-                                    and any((embed.footer.text or "").startswith(marker)
-                                            for embed in post.embeds)):
-                                found.append(post)
-                    if len(found) > 1:
-                        message = ("Multiple private review photos match this ID. "
-                                   "Resolve the duplicates manually before recovery.")
-                    elif len(found) == 1:
-                        hub.finish_upload(interaction.guild_id, id, found[0].id)
-                        message = (f"Recovered upload **#{id}** into the staff queue. "
-                                   "No duplicate was posted.")
-                    elif confirmed_not_published:
-                        hub.discard_interrupted_upload(interaction.guild_id, id)
-                        message = f"Unposted upload reservation **#{id}** cleared."
+                    staged = hub.stage_info(interaction.guild_id, id)
+                    if staged and staged[1] == "receiving":
+                        if bot.grower_intake is None:
+                            raise ValueError("Private R2 staging is unavailable.")
+                        if await bot.grower_intake.exists(staged[0]):
+                            hub.stage_recover_received(interaction.guild_id, id)
+                            message = (f"Recovered privately staged photo **#{id}**. "
+                                       "It is queued without reuploading.")
+                        elif confirmed_not_published:
+                            # This only releases an original after both storage and
+                            # the review-channel post have been checked.
+                            await bot.grower_intake.delete(staged[0])
+                            hub.discard_interrupted_upload(interaction.guild_id, id)
+                            message = f"Unstored photo reservation **#{id}** cleared."
+                        else:
+                            message = ("No R2 object exists for this interrupted intake. "
+                                       "Confirm no photo was posted or staged before "
+                                       "using confirmed_not_published:true.")
                     else:
-                        message = ("No matching photo was found in the last 250 review-channel "
-                                   "messages. Search the **entire original channel** before "
-                                   "setting confirmed_not_published:true. The reservation "
-                                   "is preserved to prevent losing track of a posted photo.")
+                        found = []
+                        review = await _saved_channel(interaction, item[9])
+                        if review is not None:
+                            marker = f"Grower upload #{id} | "
+                            async for post in review.history(limit=250):
+                                if (post.author.id == bot.user.id
+                                        and any((embed.footer.text or "").startswith(marker)
+                                                for embed in post.embeds)):
+                                    found.append(post)
+                        if len(found) > 1:
+                            message = ("Multiple private review photos match this ID. "
+                                       "Resolve duplicates manually before recovery.")
+                        elif len(found) == 1:
+                            if staged and staged[1] == "processing":
+                                hub.finish_staged_upload(interaction.guild_id, id, found[0].id)
+                            else:
+                                hub.finish_upload(interaction.guild_id, id, found[0].id)
+                            message = (f"Recovered upload **#{id}** into the staff queue. "
+                                       "No duplicate was posted.")
+                        elif confirmed_not_published:
+                            if staged and staged[1] == "processing":
+                                hub.stage_requeue_interrupted(interaction.guild_id, id)
+                                message = (f"Photo **#{id}** returned to the private "
+                                           "processing queue; no gallery post created.")
+                            else:
+                                hub.discard_interrupted_upload(interaction.guild_id, id)
+                                message = f"Unposted upload reservation **#{id}** cleared."
+                        else:
+                            message = ("No matching photo was found in the last 250 review "
+                                       "messages. Search the **entire original channel** "
+                                       "before setting confirmed_not_published:true. "
+                                       "No duplicate will be posted automatically.")
             elif item[8] != "reviewing":
                 message = f"Submission **#{id}** is **{item[8]}**. No recovery is needed."
             elif not hub.review_is_interrupted(interaction.guild_id, id):
@@ -507,7 +581,7 @@ def register_grower_commands(bot) -> None:
             embed = discord.Embed(
                 title="🌱 Grower Showcase | Your profile",
                 description=f"**{badge}**\n"
-                            f"Approved photos: **{approved}** · Awaiting review: **{pending}**\n"
+                            f"Approved photos: **{approved}** · Queued/awaiting review: **{pending}**\n"
                             f"Documented strain names: **{varieties}**\n\n"
                             "Milestones: 1 photo · 5 photos · 20 photos. "
                             "These are community credits, not proof of cultivar identity.",

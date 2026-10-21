@@ -20,6 +20,8 @@ from .leafly import leafly_reference, leafly_answer
 from .strain_profiles import StrainProfileStore, database_embed, strain_embed, source_directory_embed
 from .growers import GrowerHub
 from .grower_commands import register_grower_commands
+from .grower_intake import GrowerIntake
+from .grower_queue import run_queue
 from .rich_sources import sourced_summary
 from .profile_reply import build_strain_profile
 from .strain_media import StrainPhotoService
@@ -45,6 +47,8 @@ class LabBot(commands.Bot):
         self.quota = QuotaGate()
         self.strain_profiles = StrainProfileStore()
         self.growers = GrowerHub(self.strain_profiles)
+        self.grower_intake = None
+        self.grower_queue_task = None
         self.strain_photo_service = None
         logger.info("Quota ledger at launch: %s", self.quota.continuity_description())
         self._heartbeat_task = None
@@ -53,6 +57,15 @@ class LabBot(commands.Bot):
         self.http_session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=18),
             headers={"User-Agent": "TheWeedDoctor/0.1 (Discord cannabis research bot)"})
+        if os.getenv("LAB_GROWER_R2_QUEUE_ENABLED", "false").lower() in ("true", "1", "on"):
+            try:
+                self.grower_intake = GrowerIntake.from_env(self.http_session)
+                self.grower_queue_task = asyncio.create_task(
+                    run_queue(self), name="grower-queue")
+                logger.info("Grower R2 durable queue enabled; one image worker")
+            except ValueError:
+                # Never silently fall back to memory uploads if R2 was requested.
+                logger.exception("Grower R2 queue misconfigured; uploads will be denied")
         self.strain_photo_service = StrainPhotoService(self.http_session, quota=self.quota)
         self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""),
                                      os.getenv("OPENFDA_API_KEY", ""), quota=self.quota)
@@ -226,6 +239,9 @@ class LabBot(commands.Bot):
         logger.info("Discord gateway ready: bot=%s guild_count=%d", self.user, len(self.guilds))
 
     async def close(self):
+        if self.grower_queue_task:
+            self.grower_queue_task.cancel()
+            await asyncio.gather(self.grower_queue_task, return_exceptions=True)
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
             await asyncio.gather(self._heartbeat_task, return_exceptions=True)

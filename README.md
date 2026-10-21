@@ -552,6 +552,35 @@ ownership. Photos are **not automatically imported** into global
 `/strainprofile` records or offered for reuse outside that server. The
 manager should moderate labels, permissions, imagery, and local law.
 
+**Optional private R2 intake queue (requires deployment configuration):**
+The `LAB_GROWER_R2_QUEUE_ENABLED=false` default preserves the existing
+single-upload path, including the 256 MiB RAM setting. Once a separate private
+R2 bucket and Worker are deployed, set `LAB_GROWER_R2_QUEUE_ENABLED=true`,
+`LAB_GROWER_QUEUE_ENDPOINT` to its HTTPS URL and
+`LAB_GROWER_QUEUE_TOKEN` to the same secret as the Worker's
+`GROWER_INTAKE_TOKEN` (at least 32 random characters). The Worker config is
+`cloudflare/wrangler.grower.toml`, and source is
+`cloudflare/grower-intake-worker.js`. Never make the R2 bucket public and
+never store the token in GitHub.
+
+With the queue enabled, the bot registers a durable record and the Worker
+streams the submitted Discord attachment directly into the private R2 bucket.
+One queue consumer downloads the staged file to a temporary disk file and
+starts an isolated image-normalization process to release image decode memory
+after completion. The bot posts only the sanitized result to the original
+private review channel, then deletes its R2 original. The SQLite queue caps
+at 20 active slots globally; if Discord status is ambiguous, the item is
+**not automatically reposted**. Staff can use `/growerrecover` after five
+minutes to reconcile missing intake receipts or previously posted photos.
+A Worker failure prevents staging; it does not silently revert to RAM intake.
+
+This is a candidate architecture, **not yet a live deployment**. It needs
+real Discloud RSS and disk-quota measurements, private R2 Worker deployment
+and credential setup, staging upload/restart/withdrawal tests, and verified
+database persistence/backups before being enabled for members. Keep a
+time-based R2 lifecycle expiration as a second cleanup mechanism; the
+application also issues object deletion after confirmed completion.
+
 **Hosting and memory:** `discloud.config` currently specifies `RAM=256`.
 The serialized upload path reduces image-processing peak usage, but cannot
 prove a full Discord bot with other extensions fits that memory ceiling during

@@ -95,6 +95,14 @@ class GrowerHub:
             if "operation_utc" not in columns:
                 db.execute("""ALTER TABLE grower_submissions
                     ADD COLUMN operation_utc TEXT NOT NULL DEFAULT ''""")
+            db.execute("""CREATE TABLE IF NOT EXISTS grower_stage_queue (
+                guild TEXT NOT NULL, submission INTEGER NOT NULL,
+                object_key TEXT NOT NULL UNIQUE, state TEXT NOT NULL,
+                created_utc TEXT NOT NULL, changed_utc TEXT NOT NULL,
+                PRIMARY KEY (guild, submission)
+            )""")
+            db.execute("""CREATE INDEX IF NOT EXISTS idx_grower_stage_work
+                ON grower_stage_queue(state,created_utc)""")
             db.execute("""CREATE TABLE IF NOT EXISTS grower_storage_probe (
                 singleton INTEGER PRIMARY KEY CHECK(singleton=1),
                 armed_process TEXT NOT NULL, armed_utc TEXT NOT NULL,
@@ -222,6 +230,142 @@ class GrowerHub:
                  "0", created, str(review_channel), "uploading", created))
             return cursor.lastrowid
 
+    def start_staged_upload(self, guild_id: int, user_id: int, byline: str,
+                            strain: str, stage: str, caption: str, review_channel: int):
+        """Reserve the submission and private R2 object name before any network call."""
+        # Reuse authoritative per-guild settings and per-author limits.
+        sid = self.begin_upload(guild_id, user_id, byline, strain,
+                                stage, caption, review_channel)
+        key = f"photos/{guild_id}/{sid}/{secrets.token_hex(16)}"
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            with closing(self.profiles._connect()) as db, db:
+                db.execute("BEGIN IMMEDIATE")
+                slots = db.execute(
+                    "SELECT COUNT(*) FROM grower_stage_queue").fetchone()[0]
+                if slots >= 20:
+                    raise ValueError("The 20-photo staging queue is full. Try again later.")
+                db.execute(
+                    """INSERT INTO grower_stage_queue
+                    (guild,submission,object_key,state,created_utc,changed_utc)
+                    VALUES(?,?,?,'receiving',?,?)""",
+                    (str(guild_id), sid, key, now, now))
+        except Exception:
+            # No staged network call has occurred yet; only this reservation is safe to erase.
+            with closing(self.profiles._connect()) as db, db:
+                db.execute(
+                    """DELETE FROM grower_submissions
+                    WHERE guild=? AND id=? AND status='uploading' AND review_message='0'""",
+                    (str(guild_id), sid))
+            raise
+        return sid, key
+
+    def stage_confirmed(self, guild_id: int, submission_id: int):
+        """Store a durable queue receipt only after R2 accepted the complete photo."""
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with closing(self.profiles._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute(
+                """UPDATE grower_stage_queue SET state='queued',changed_utc=?
+                WHERE guild=? AND submission=? AND state='receiving'""",
+                (now, str(guild_id), submission_id)).rowcount
+            if changed != 1:
+                raise ValueError("The staging receipt no longer matches this upload.")
+            count = db.execute(
+                """UPDATE grower_submissions SET status='queued',operation_utc=''
+                WHERE guild=? AND id=? AND status='uploading'""",
+                (str(guild_id), submission_id)).rowcount
+            if count != 1:
+                raise RuntimeError("Upload reservation changed before queuing.")
+
+    def stage_info(self, guild_id: int, submission_id: int):
+        with closing(self.profiles._connect()) as db:
+            return db.execute(
+                """SELECT object_key,state FROM grower_stage_queue
+                WHERE guild=? AND submission=?""",
+                (str(guild_id), submission_id)).fetchone()
+
+    def stage_recover_received(self, guild_id: int, submission_id: int):
+        if not self.upload_is_interrupted(guild_id, submission_id):
+            raise ValueError("The upload is not interrupted.")
+        self.stage_confirmed(guild_id, submission_id)
+
+    def claim_stage(self):
+        """One durable queue claim; do not resubmit stale processing jobs blindly."""
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with closing(self.profiles._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT q.guild,q.submission,q.object_key,s.review_channel
+                FROM grower_stage_queue q
+                JOIN grower_submissions s ON q.guild=s.guild AND q.submission=s.id
+                WHERE q.state='queued' AND s.status='queued'
+                ORDER BY q.created_utc,q.submission LIMIT 1""").fetchone()
+            if not row:
+                return None
+            db.execute(
+                """UPDATE grower_stage_queue SET state='processing',changed_utc=?
+                WHERE guild=? AND submission=? AND state='queued'""",
+                (now, row[0], row[1]))
+            db.execute(
+                """UPDATE grower_submissions SET status='uploading',operation_utc=?
+                WHERE guild=? AND id=? AND status='queued'""",
+                (now, row[0], row[1]))
+            return row
+
+    def finish_staged_upload(self, guild_id: int, submission_id: int, message_id: int):
+        """Atomically save the Discord receipt and mark the R2 original for cleanup."""
+        if message_id <= 0:
+            raise ValueError("Discord review message is required.")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with closing(self.profiles._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute(
+                """UPDATE grower_submissions
+                SET status='pending',review_message=?,operation_utc=''
+                WHERE guild=? AND id=? AND status='uploading'""",
+                (str(message_id), str(guild_id), submission_id)).rowcount
+            if changed != 1:
+                raise ValueError("Staged upload has already been completed or removed.")
+            done = db.execute(
+                """UPDATE grower_stage_queue SET state='cleanup',changed_utc=?
+                WHERE guild=? AND submission=? AND state='processing'""",
+                (now, str(guild_id), submission_id)).rowcount
+            if done != 1:
+                raise RuntimeError("The staged photo queue entry is missing.")
+
+    def stage_requeue_interrupted(self, guild_id: int, submission_id: int):
+        """Use only after staff verifies the photo was never sent to Discord."""
+        if not self.upload_is_interrupted(guild_id, submission_id):
+            raise ValueError("The processing step is not interrupted.")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with closing(self.profiles._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            changed = db.execute(
+                """UPDATE grower_stage_queue SET state='queued',changed_utc=?
+                WHERE guild=? AND submission=? AND state='processing'""",
+                (now, str(guild_id), submission_id)).rowcount
+            if changed != 1:
+                raise ValueError("No interrupted staged processing job was found.")
+            db.execute(
+                """UPDATE grower_submissions SET status='queued',operation_utc=''
+                WHERE guild=? AND id=? AND status='uploading'""",
+                (str(guild_id), submission_id))
+
+    def stage_cleanup(self, guild_id: int, submission_id: int):
+        """Call only after successful remote delete."""
+        with closing(self.profiles._connect()) as db, db:
+            db.execute(
+                """DELETE FROM grower_stage_queue
+                WHERE guild=? AND submission=? AND state='cleanup'""",
+                (str(guild_id), submission_id))
+
+    def cleanup_entries(self):
+        with closing(self.profiles._connect()) as db:
+            return db.execute(
+                """SELECT guild,submission,object_key FROM grower_stage_queue
+                WHERE state='cleanup' ORDER BY created_utc LIMIT 10""").fetchall()
+
     def finish_upload(self, guild_id: int, submission_id: int, review_message: int):
         """Confirm a photo by attaching the Discord ID to the reserved record."""
         if review_message <= 0:
@@ -255,6 +399,9 @@ class GrowerHub:
                 raise ValueError("The upload is still active or no longer interrupted.")
             db.execute(
                 "DELETE FROM grower_submissions WHERE guild=? AND id=? AND status='uploading'",
+                (str(guild_id), submission_id))
+            db.execute(
+                "DELETE FROM grower_stage_queue WHERE guild=? AND submission=?",
                 (str(guild_id), submission_id))
 
     def pending(self, guild_id: int):
@@ -324,7 +471,7 @@ class GrowerHub:
              purpose: str, user_id: int | None = None):
         if purpose not in ("review", "remove", "reject"):
             raise ValueError("Unsupported submission action")
-        allowed = ("pending",) if purpose in ("review", "reject") else ("pending", "approved")
+        allowed = ("pending",) if purpose in ("review", "reject") else ("pending", "approved", "queued")
         status = "reviewing" if purpose == "review" else "removing"
         with closing(self.profiles._connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
@@ -337,6 +484,19 @@ class GrowerHub:
                 raise ValueError("Submission not found.")
             if user_id is not None and item[1] != self._identity(guild_id, user_id):
                 raise ValueError("You may only withdraw your own submissions.")
+            if purpose == "remove" and item[8] == "uploading":
+                # A receiving transfer must have timed out before cancellation.
+                # Never delete while a processor may have sent a Discord post.
+                stage = db.execute(
+                    """SELECT state FROM grower_stage_queue
+                    WHERE guild=? AND submission=?""",
+                    (str(guild_id), submission_id)).fetchone()
+                if stage and stage[0] == "receiving":
+                    started = db.execute(
+                        "SELECT operation_utc FROM grower_submissions WHERE guild=? AND id=?",
+                        (str(guild_id), submission_id)).fetchone()[0]
+                    if self._stale(started):
+                        allowed = (*allowed, "uploading")
             if item[8] not in allowed:
                 if not (purpose == "remove" and item[8] == "removing"):
                     raise ValueError("Submission is already being processed.")
@@ -353,7 +513,7 @@ class GrowerHub:
             return item
 
     def unlock(self, guild_id: int, submission_id: int, old_status: str):
-        if old_status not in ("pending", "approved"):
+        if old_status not in ("pending", "approved", "queued", "uploading"):
             raise ValueError("Unsupported recovery status")
         with closing(self.profiles._connect()) as db, db:
             db.execute(
@@ -379,6 +539,9 @@ class GrowerHub:
             db.execute(
                 "DELETE FROM grower_submissions WHERE guild=? AND id=? AND status=?",
                 (str(guild_id), submission_id, status))
+            db.execute(
+                """DELETE FROM grower_stage_queue WHERE guild=? AND submission=?""",
+                (str(guild_id), submission_id))
 
     def my_uploads(self, guild_id: int, user_id: int):
         """Recover submission IDs for private withdrawal, even after restart."""
@@ -386,7 +549,7 @@ class GrowerHub:
             return db.execute(
                 """SELECT id,strain,status FROM grower_submissions
                 WHERE guild=? AND author_hash=?
-                AND status IN ('uploading','pending','approved')
+                AND status IN ('uploading','queued','pending','approved')
                 ORDER BY id DESC LIMIT 10""",
                 (str(guild_id), self._identity(guild_id, user_id))).fetchall()
 
@@ -405,7 +568,7 @@ class GrowerHub:
         with closing(self.profiles._connect()) as db:
             approved, pending, varieties = db.execute(
                 """SELECT COUNT(*) FILTER(WHERE status='approved'),
-                    COUNT(*) FILTER(WHERE status IN ('pending','uploading')),
+                    COUNT(*) FILTER(WHERE status IN ('pending','queued','uploading')),
                     COUNT(DISTINCT CASE WHEN status='approved' THEN strain END)
                 FROM grower_submissions WHERE guild=? AND author_hash=?""",
                 (str(guild_id), self._identity(guild_id, user_id))).fetchone()

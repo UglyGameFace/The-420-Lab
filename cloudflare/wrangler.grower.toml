@@ -1,0 +1,10 @@
+name = "the-weed-doctor-private-intake"
+main = "grower-intake-worker.js"
+compatibility_date = "2026-10-01"
+
+[[r2_buckets]]
+binding = "INTAKE"
+bucket_name = "the-weed-doctor-grower-staging"
+
+# Set only through: wrangler secret put GROWER_INTAKE_TOKEN
+# Do not add routes, public bucket domains or token values to Git.
