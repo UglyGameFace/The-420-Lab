@@ -16,6 +16,7 @@ SOURCE = "https://www.findmyseeds.com/find-my-seeds-public-api/"
 _CACHE: OrderedDict[str, tuple[float, str]] = OrderedDict()
 _TTL = 3600
 _MISS_TTL = 300
+_PROVIDER_RETRY_AFTER = 0.0
 
 
 def safe(value: object, limit: int = 100) -> str:
@@ -89,8 +90,11 @@ async def source_summary(session: aiohttp.ClientSession | None, quota, name: str
         return "Find My Seeds lookup unavailable."
     if any(char in name for char in ("@", "<", ">", "\n", "\r", chr(96))) or "://" in name:
         return "Invalid strain name."
+    global _PROVIDER_RETRY_AFTER
     key = compact(name)
     now = time.monotonic()
+    if now < _PROVIDER_RETRY_AFTER:
+        return "Find My Seeds temporarily unavailable; using other sources."
     cached = _CACHE.get(key)
     if cached and now - cached[0] < (_TTL if cached[1].startswith("**") else _MISS_TTL):
         _CACHE.move_to_end(key)
@@ -107,12 +111,14 @@ async def source_summary(session: aiohttp.ClientSession | None, quota, name: str
             if response.status == 429:
                 return "Provider rate limit reached."
             if response.status != 200:
+                _PROVIDER_RETRY_AFTER = now + 300
                 return "Find My Seeds temporarily unavailable."
             body = await response.content.read(150001)
             if len(body) > 150000:
                 return "Provider response too large."
             data = json.loads(body)
     except (aiohttp.ClientError, TimeoutError, ValueError, UnicodeError, OSError):
+        _PROVIDER_RETRY_AFTER = now + 300
         return "Find My Seeds temporarily unavailable."
     result = format_record(data, name)
     if result.startswith("**") or result.startswith("No exact"):
