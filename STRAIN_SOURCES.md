@@ -94,3 +94,19 @@ Source: https://www.strainapi.com/docs/
 Terms: https://www.strainapi.com/api-terms/
 
 StrainAPI permits attributed developer-app usage and offers no-key read-only V1 search and strain details. In October 2026 its website listed about 268 profiles. The Weed Doctor now uses it as an exact-name fallback when CannaLib has no usable profile. It provides source-reported lineage, breeder, terpene, aroma and flavor facts with an original-page link. All external requests count against the bot's existing provider quota. It does not bulk copy the provider, embed third-party images, or assume strain-wide potency. The live profile count is separate from the offline name index. Set STRAINAPI_ENABLED=false to turn it off; provider behavior on Discloud has not been inspected directly.
+
+## Find My Seeds public community profiles
+
+Endpoint: https://www.findmyseeds.com/wp-json/strain-compass/v1/strains
+Docs: https://www.findmyseeds.com/find-my-seeds-public-api/
+Read-only, no key. The Weed Doctor queries one exact name per user
+request and stores at most 128 1-hour memory-cache entries.
+Returns per-source excerpt, breeder, reported effects/flavors/terpenes
+and community rating + rating_count where available. Never label
+these ratings as Leafly reviews or laboratory efficacy.
+Source photos are linked through the original page. No bulk mirroring
+or copied image hosting. The fallback has a conservative 8-second
+timeout and uses the same global research-API safety allowance.
+The public Find Strains modal and /strainprofile use the same rich
+profile presentation. The local index size in /straindb never counts
+remote results as newly stored entries.

@@ -246,6 +246,16 @@ def source_directory_embed():
             "attribution; no bulk syncing. **Not a Leafly review feed.**"
         ), inline=False)
     embed.add_field(
+        name="⭐ Find My Seeds | Public community score and photo source",
+        value=(
+            "[Free strain API](https://www.findmyseeds.com/find-my-seeds-public-api/) "
+            "• Connected as an exact-name, on-demand lookup with a bounded "
+            "one-hour cache. Where available, shows the provider's short "
+            "overview, reported effects and flavors, **its own rating and "
+            "review count**, with a link to the original page and photos. "
+            "This is not a Leafly score or a lab-tested effect."
+        ), inline=False)
+    embed.add_field(
         name="🌱 StrainAPI | Additional descriptions and claims",
         value=(
             "[StrainAPI documentation](https://www.strainapi.com/docs/) • "
@@ -264,10 +274,10 @@ def source_directory_embed():
             "**Not yet linked into each strain profile**, and never a universal potency claim."
         ), inline=False)
     embed.add_field(
-        name="📸 Pictures & reviewed descriptions",
+        name="📸 Pictures & referenced descriptions",
         value=(
             "[Find My Seeds API](https://www.findmyseeds.com/find-my-seeds-public-api/) "
-            "also offers community review counts, images and descriptions "
+            "provides community review counts, profile photos and descriptions "
             "on its public profiles; image re-use rights and API stability "
             "must be confirmed before embedding third-party media. "
             "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "

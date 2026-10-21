@@ -380,3 +380,20 @@ mean these packaged files automatically update on a schedule.
 The /strainprofile command now uses the read-only Flower & Freedom beta API before its existing CannaLib and StrainAPI fallback. Where an exact name matches, it displays a short original provider summary, reported genetics, aromas and effects, the upstream profile URL, and its actual source update date. It never converts a single product's lab test into an estimate for all products of that strain. The API currently advertises about 50 profiles and requires visible attribution, which is included. Only requested records are fetched, with a short bounded in-memory cache; no bulk mirroring and no new credentials. Toggle with FLOWER_FREEDOM_ENABLED=false if necessary. The existing /straindb database-size count includes **only packaged local name indexes**, not these 50 remote provider profiles, so the count remains accurate. The public source guide /strainsources also distinguishes these independently owned summaries from unlicensed Leafly descriptions and images.
 
 Other alternatives: Find My Seeds publishes a read-only strain API with community scores, review counts, and image fields, but individual third-party image rights still require verification before embedding; Strainpedia's private developer API advertises structured images and effect descriptions at $50/month. Neither option should be represented as a live Leafly data feed.
+
+## Independent rich profiles now live
+
+The public Find Strains modal and /strainprofile share the same credited
+profile builder. They include current source-reported details when a free
+external provider responds, without changing the packaged name count.
+Provider order: Flower & Freedom original summaries, Find My Seeds
+community descriptions and ratings, then CannaLib and StrainAPI.
+Find My Seeds uses its free exact-name public API with one-hour caching
+and per-bot quota protections. Its score is always labeled as a
+Find My Seeds community rating, never a Leafly score, efficacy claim,
+or independent lab measurement. Source photos are accessible through
+the provider's original profile link, rather than copied into our bot.
+The existing private /doctorstrainset supports photos you own or have
+permission to publish. Use FINDMYSEEDS_ENABLED=false to disable the
+new external provider if it becomes unavailable.
+Source: https://www.findmyseeds.com/find-my-seeds-public-api/
