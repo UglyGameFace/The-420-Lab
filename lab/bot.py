@@ -18,6 +18,8 @@ from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
 from .leafly import leafly_reference, leafly_answer
 from .strain_profiles import StrainProfileStore, database_embed, strain_embed, source_directory_embed
+from .growers import GrowerHub
+from .grower_commands import register_grower_commands
 from .rich_sources import sourced_summary
 from .profile_reply import build_strain_profile
 from .strain_media import StrainPhotoService
@@ -39,6 +41,7 @@ class LabBot(commands.Bot):
         self.health = LabHealth()
         self.quota = QuotaGate()
         self.strain_profiles = StrainProfileStore()
+        self.growers = GrowerHub(self.strain_profiles)
         self.strain_photo_service = None
         logger.info("Quota ledger at launch: %s", self.quota.continuity_description())
         self._heartbeat_task = None
@@ -231,6 +234,7 @@ class LabBot(commands.Bot):
 
 
 bot = LabBot()
+register_grower_commands(bot)
 
 
 @bot.tree.command(name="askthc", description="PubMed research; if AI enabled, your question is sent to Gemini")
