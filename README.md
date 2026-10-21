@@ -305,3 +305,32 @@ in a **local SQLite file** (`strain-profiles.sqlite3` by default; override with
 not verified. Use durable storage and backups when available; the anonymous
 source catalogs remain usable even if review storage is lost. No database
 records are committed to public GitHub.
+
+## Live and historical strain data controls
+
+See [STRAIN_SOURCES.md](STRAIN_SOURCES.md) for current source terms, data
+quality, photos and lab chemistry limitations, privacy controls and freshness.
+
+Public `/straindb` and the **📊 Database Info** panel button show the
+**actual deduplicated local index size** plus each source's snapshot date.
+The database is compiled from Kushy 2017, CI-Strains-Pro 2026 and a historic
+Leafly-name mirror. It **does not automatically sync Leafly reviews**.
+
+`/strainprofile name:` combines locally indexed names, credited and
+permission-cleared descriptions/photos (if supplied), optional original
+community ratings from this server, and an on-demand **CannaLib** educational
+source lookup. CannaLib requests are read-only, never cached, strictly
+rate-limited to 35/hour and 180/day, and carry the required visible credit.
+No account or configuration is necessary for anonymous access, but its
+availability is not guaranteed. Optional `CANNALIB_ENABLED=false` stops the
+external queries. Optional `CANNALIB_API_KEY` may be supplied privately to
+use an authorized provider account. Data is not copied into our catalog,
+resold or used to train AI models. Consult https://cannalib.org/api/terms/.
+
+The app owner can use `/doctorstrainset` and `/doctorstrainclear` to
+manage descriptions and original/licensed photos with source attribution.
+Server managers may **opt into independent server reviews** via
+`/strainreviews enabled:true`; members then use `/strainrate`.
+No Leafly proprietary reviews are reproduced. The separate
+`strain-profiles.sqlite3` storage file may be lost on hosting redeploy if
+persistent disk is not configured; deployment status does not prove retention.

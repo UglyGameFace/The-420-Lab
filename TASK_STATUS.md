@@ -122,3 +122,20 @@ untrusted input, overlarge files, and misleading medical conclusions.
 Automated tests cover known links, aliases, unverified names, invalid
 inputs, and authorized CSV parser behavior. Still requires a live Discord
 member test; no live Leafly data feed is authorized or activated.
+
+## Rich source-backed strain information, database size and honest freshness
+
+Public commands /straindb and /strainprofile plus Database Info panel action
+expose live-calculated normalized catalog counts and source snapshot dates.
+Catalog is 30,582 normalized distinct names; a previous arithmetic sum
+30,593 double-counted collisions and is corrected. Built independent,
+rate-limited, read-only CannaLib botanical-context lookup into /strainprofile
+with 35/hour and 180/day anonymous global limits, exact-name validation,
+mandatory Data by CannaLib attribution, no provider caching or bulk export,
+and safe failure fallback. Cannlytics remains a batch-specific lab-data
+reference. Added source/licence audit in STRAIN_SOURCES.md, optional
+CANNALIB_ENABLED kill switch and key, and documented owner-confirmed
+descriptions/images plus opt-in first-party reviews. Review/photo storage
+persistence on Discloud remains to be verified. Live external CannaLib API
+response could not be directly observed from available tools; unit tests
+exercise documented schema with network mocks.
