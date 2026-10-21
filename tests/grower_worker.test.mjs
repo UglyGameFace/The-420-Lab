@@ -1,4 +1,4 @@
-"""Runtime privacy and lifecycle tests for the private Cloudflare Worker."""
+// Runtime privacy and lifecycle tests for the private Cloudflare Worker.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
