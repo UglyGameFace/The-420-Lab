@@ -44,6 +44,8 @@ def library_options():
         discord.SelectOption(label="Historical Strain Names", value="strain"),
         discord.SelectOption(label="Database Size & Source Dates", value="database",
                              description="Live catalog count and independent data sources"),
+        discord.SelectOption(label="Data Sources, Photos & Lab Results", value="sources",
+                             description="Who provides which facts, ratings or legally reusable media"),
         discord.SelectOption(label="Leafly Strain Profiles", value="leafly",
                              description="Verified pages or targeted search"),
         discord.SelectOption(label="Systematic Reviews", value="papers:systematic"),
@@ -75,6 +77,12 @@ class LibraryPicker(discord.ui.Modal):
     async def on_submit(self, interaction):
         from .panel import answer
         choice = self.choice.values[0]
+        if choice == "sources":
+            from .strain_profiles import source_directory_embed
+            await interaction.response.send_message(
+                embed=source_directory_embed(), ephemeral=True,
+                allowed_mentions=discord.AllowedMentions.none())
+            return
         if choice == "database":
             from .strain_profiles import database_embed
             await interaction.response.send_message(
