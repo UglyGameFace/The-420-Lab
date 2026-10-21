@@ -6,6 +6,7 @@ from .sources import COMPOUNDS
 from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS
 from .strains import result_text as strain_result_text
+from .leafly import leafly_answer
 
 
 class TopicPicker(discord.ui.Modal):
@@ -41,6 +42,8 @@ def library_options():
         discord.SelectOption(label="PubMed: Research Papers", value="papers:all"),
         discord.SelectOption(label="Registered Clinical Trials", value="trials"),
         discord.SelectOption(label="Historical Strain Names", value="strain"),
+        discord.SelectOption(label="Leafly Strain Profiles", value="leafly",
+                             description="Verified pages or targeted search"),
         discord.SelectOption(label="Systematic Reviews", value="papers:systematic"),
         discord.SelectOption(label="Randomized Trials", value="papers:randomized"),
         discord.SelectOption(label="Observational Studies", value="papers:observational"),
@@ -87,6 +90,13 @@ class LibraryPicker(discord.ui.Modal):
             return
         if choice == "trials":
             await answer(interaction, self.bot, "trials", term[:100])
+            return
+        if choice == "leafly":
+            if not await self.bot.admit_interaction(interaction):
+                return
+            await interaction.response.send_message(
+                leafly_answer(term[:60]), ephemeral=True,
+                allowed_mentions=discord.AllowedMentions.none())
             return
         if choice == "strain":
             if not await self.bot.admit_interaction(interaction):
