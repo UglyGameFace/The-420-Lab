@@ -16,6 +16,7 @@ from .panel import LabPanelView, panel_embed, PANEL_THEMES
 from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
+from .leafly import leafly_reference, leafly_answer
 from .health import LabHealth
 from .quotas import QuotaGate, QuotaExceeded
 from .control import OwnerControlView, panel as owner_panel
@@ -294,7 +295,20 @@ async def straininfo(interaction: discord.Interaction, name: app_commands.Range[
         return
     bot.health.record("strain")
     await interaction.response.send_message(
-        strain_result_text(name), ephemeral=True,
+        clip_discord(leafly_answer(name)), ephemeral=True,
+        allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="leafly", description="Find verified Leafly strain profiles and available research")
+@app_commands.describe(name="Strain name, such as Super Boof or Northern Lights")
+@app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
+async def leafly(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
+    """Leafly references alongside our independent strain-name catalog."""
+    if not await bot.admit_interaction(interaction):
+        return
+    bot.health.record("strain")
+    await interaction.response.send_message(
+        clip_discord(leafly_answer(name)), ephemeral=True,
         allowed_mentions=discord.AllowedMentions.none())
 
 
