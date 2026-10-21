@@ -109,9 +109,10 @@ class GrowerHub:
     def _identity(self, guild_id: int, user_id: int) -> str:
         return self.profiles.member_hash(guild_id, user_id)
 
-    def submit(self, guild_id: int, user_id: int, byline: str,
-               strain: str, stage: str, caption: str, review_message: int,
-               review_channel: int) -> int:
+    def begin_upload(self, guild_id: int, user_id: int, byline: str,
+                     strain: str, stage: str, caption: str,
+                     review_channel: int) -> int:
+        """Reserve a durable ID before the first Discord send can occur."""
         setting = self.configuration(guild_id)
         if not setting or not setting[2]:
             raise ValueError("Grower Showcase has not been configured in this server.")
@@ -128,7 +129,7 @@ class GrowerHub:
             db.execute("BEGIN IMMEDIATE")
             pending = db.execute(
                 "SELECT COUNT(*) FROM grower_submissions "
-                "WHERE guild=? AND author_hash=? AND status='pending'",
+                "WHERE guild=? AND author_hash=? AND status IN ('pending','uploading')",
                 (str(guild_id), identity)).fetchone()[0]
             cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
                 "%Y-%m-%dT%H:%M:%SZ")
@@ -141,11 +142,46 @@ class GrowerHub:
             cursor = db.execute(
                 """INSERT INTO grower_submissions
                 (guild,author_hash,byline,strain,stage,caption,review_message,
-                 created_utc,review_channel)
-                VALUES(?,?,?,?,?,?,?,?,?)""",
+                 created_utc,review_channel,status,operation_utc)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                 (str(guild_id), identity, byline, name, stage, caption,
-                 str(review_message), created, str(review_channel)))
+                 "0", created, str(review_channel), "uploading", created))
             return cursor.lastrowid
+
+    def finish_upload(self, guild_id: int, submission_id: int, review_message: int):
+        """Confirm a photo by attaching the Discord ID to the reserved record."""
+        if review_message <= 0:
+            raise ValueError("A valid Discord review message is required.")
+        with closing(self.profiles._connect()) as db, db:
+            changed = db.execute(
+                """UPDATE grower_submissions
+                SET review_message=?,status='pending',operation_utc=''
+                WHERE guild=? AND id=? AND status='uploading'""",
+                (str(review_message), str(guild_id), submission_id)).rowcount
+            if changed != 1:
+                raise ValueError("The upload state changed before confirmation.")
+
+    def upload_is_interrupted(self, guild_id: int, submission_id: int) -> bool:
+        with closing(self.profiles._connect()) as db:
+            row = db.execute(
+                """SELECT status,operation_utc FROM grower_submissions
+                WHERE guild=? AND id=?""",
+                (str(guild_id), submission_id)).fetchone()
+        return bool(row and row[0] == "uploading" and self._stale(row[1]))
+
+    def discard_interrupted_upload(self, guild_id: int, submission_id: int):
+        """Only after staff confirms no review-channel post exists."""
+        with closing(self.profiles._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT status,operation_utc FROM grower_submissions
+                WHERE guild=? AND id=?""",
+                (str(guild_id), submission_id)).fetchone()
+            if not row or row[0] != "uploading" or not self._stale(row[1]):
+                raise ValueError("The upload is still active or no longer interrupted.")
+            db.execute(
+                "DELETE FROM grower_submissions WHERE guild=? AND id=? AND status='uploading'",
+                (str(guild_id), submission_id))
 
     def pending(self, guild_id: int):
         with closing(self.profiles._connect()) as db:
@@ -175,7 +211,7 @@ class GrowerHub:
         with closing(self.profiles._connect()) as db:
             return db.execute(
                 """SELECT id,status FROM grower_submissions
-                WHERE guild=? AND status IN ('reviewing','removing')
+                WHERE guild=? AND status IN ('uploading','reviewing','removing')
                 AND (operation_utc='' OR operation_utc<?)
                 ORDER BY id LIMIT 20""", (str(guild_id), cutoff)).fetchall()
 
@@ -276,7 +312,7 @@ class GrowerHub:
             return db.execute(
                 """SELECT id,strain,status FROM grower_submissions
                 WHERE guild=? AND author_hash=?
-                AND status IN ('pending','approved')
+                AND status IN ('uploading','pending','approved')
                 ORDER BY id DESC LIMIT 10""",
                 (str(guild_id), self._identity(guild_id, user_id))).fetchall()
 
@@ -295,7 +331,7 @@ class GrowerHub:
         with closing(self.profiles._connect()) as db:
             approved, pending, varieties = db.execute(
                 """SELECT COUNT(*) FILTER(WHERE status='approved'),
-                    COUNT(*) FILTER(WHERE status='pending'),
+                    COUNT(*) FILTER(WHERE status IN ('pending','uploading')),
                     COUNT(DISTINCT CASE WHEN status='approved' THEN strain END)
                 FROM grower_submissions WHERE guild=? AND author_hash=?""",
                 (str(guild_id), self._identity(guild_id, user_id))).fetchone()
