@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, PropertyMock
 
 from PIL import Image
 
@@ -299,6 +299,78 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
                     await _remove_submission(interaction, SimpleNamespace(growers=hub),
                                              sid, user_id=400)
             self.assertEqual(hub.item(22, sid)[8], "approved")
+
+    async def test_recover_adopts_existing_gallery_post_without_republishing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.submit(22, 400, "Grower", "Blue Dream", "flowering",
+                             "Original photo", 301, 101)
+            hub.lock(22, sid, purpose="review")
+            hub.prepare_review(22, sid, 102)
+            old = (datetime.now(timezone.utc) - timedelta(minutes=6)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            with sqlite3.connect(store.path) as db:
+                db.execute("UPDATE grower_submissions SET operation_utc=? WHERE id=?",
+                           (old, sid))
+            post = SimpleNamespace(
+                id=9001, author=SimpleNamespace(id=777),
+                embeds=[SimpleNamespace(footer=SimpleNamespace(
+                    text=f"Grower submission #{sid} | credited original photo"))])
+            class FakeGallery:
+                def history(self, limit):
+                    self.limit = limit
+                    async def entries():
+                        yield post
+                    return entries()
+            gallery = FakeGallery()
+            interaction = SimpleNamespace(
+                guild_id=22, response=SimpleNamespace(defer=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            with patch.object(bot, "growers", hub), \
+                 patch.object(type(bot), "user", new_callable=PropertyMock) as user, \
+                 patch("lab.grower_commands._saved_channel", new_callable=AsyncMock,
+                       return_value=gallery):
+                user.return_value = SimpleNamespace(id=777)
+                await bot.tree.get_command("growerrecover").callback(interaction, sid)
+            self.assertEqual(hub.item(22, sid)[8], "approved")
+            self.assertEqual(hub.item(22, sid)[7], "9001")
+            self.assertEqual(gallery.limit, 250)
+            self.assertIn("No duplicate", interaction.followup.send.await_args.args[0])
+
+    async def test_recover_requires_explicit_confirmation_to_requeue(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            sid = hub.submit(22, 400, "Grower", "Blue Dream", "flowering",
+                             "Original photo", 301, 101)
+            hub.lock(22, sid, purpose="review")
+            hub.prepare_review(22, sid, 102)
+            old = (datetime.now(timezone.utc) - timedelta(minutes=6)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            with sqlite3.connect(store.path) as db:
+                db.execute("UPDATE grower_submissions SET operation_utc=? WHERE id=?",
+                           (old, sid))
+            class EmptyGallery:
+                def history(self, limit):
+                    async def empty():
+                        if False:
+                            yield None
+                    return empty()
+            interaction = SimpleNamespace(
+                guild_id=22, response=SimpleNamespace(defer=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            with patch.object(bot, "growers", hub), \
+                 patch("lab.grower_commands._saved_channel", new_callable=AsyncMock,
+                       return_value=EmptyGallery()):
+                await bot.tree.get_command("growerrecover").callback(interaction, sid)
+                self.assertEqual(hub.item(22, sid)[8], "reviewing")
+                self.assertIn("entire", interaction.followup.send.await_args.args[0])
+                await bot.tree.get_command("growerrecover").callback(
+                    interaction, sid, confirmed_not_published=True)
+            self.assertEqual(hub.item(22, sid)[8], "pending")
 
     async def test_no_consent_does_not_read_or_upload_attachment(self):
         command = bot.tree.get_command("growersubmit")
