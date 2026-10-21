@@ -33,6 +33,11 @@ class StrainStatusTests(unittest.TestCase):
         self.assertIn("Cannlytics", lines)
         self.assertIn("Wikimedia Commons", lines)
 
+    def test_public_card_publish_option_defaults_private(self):
+        from inspect import signature
+        command = bot.tree.get_command("straindb")
+        self.assertIs(signature(command.callback).parameters["public"].default, False)
+
     def test_manager_controls_are_registered(self):
         commands = {c.name: c for c in bot.tree.get_commands()}
         for name in ("straindb", "strainprofile", "strainreviews", "strainrate",
@@ -40,6 +45,29 @@ class StrainStatusTests(unittest.TestCase):
             self.assertIn(name, commands)
         self.assertTrue(commands["strainreviews"].default_permissions.manage_guild)
         self.assertTrue(commands["doctorstrainset"].default_permissions.administrator)
+
+
+class PublicStatusCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def test_non_manager_cannot_publish_database_card(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+        response = SimpleNamespace(send_message=AsyncMock())
+        req = SimpleNamespace(
+            guild_id=111, permissions=SimpleNamespace(manage_guild=False),
+            response=response)
+        await bot.tree.get_command("straindb").callback(req, public=True)
+        self.assertTrue(response.send_message.await_args.kwargs["ephemeral"])
+
+    async def test_manager_can_publish_database_card(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+        response = SimpleNamespace(send_message=AsyncMock())
+        req = SimpleNamespace(
+            guild_id=111, permissions=SimpleNamespace(manage_guild=True),
+            response=response)
+        await bot.tree.get_command("straindb").callback(req, public=True)
+        self.assertFalse(response.send_message.await_args.kwargs["ephemeral"])
+        self.assertIn("30,582", response.send_message.await_args.kwargs["embed"].description)
 
 
 class StrainProfileTests(unittest.TestCase):
