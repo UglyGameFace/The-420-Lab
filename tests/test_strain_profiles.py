@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from lab.strain_profiles import (
     FIRST_INDEXED, StrainProfileStore, catalog_counts,
-    database_embed, strain_embed,
+    database_embed, strain_embed, source_directory_embed,
 )
 from lab.bot import bot
 
@@ -33,10 +33,22 @@ class StrainStatusTests(unittest.TestCase):
         self.assertIn("Cannlytics", lines)
         self.assertIn("Wikimedia Commons", lines)
 
+    def test_public_sources_directory_separates_reviews_photos_and_real_coas(self):
+        embed = source_directory_embed()
+        combined = "\n".join(str(item.value) for item in embed.fields)
+        self.assertIn("CannaLib", combined)
+        self.assertIn("StrainAPI", combined)
+        self.assertIn("Cannlytics", combined)
+        self.assertIn("Wikimedia Commons", combined)
+        self.assertIn("Leafly", combined)
+        self.assertIn("not", combined.lower())
+        self.assertIn(f"{catalog_counts()['distinct']:,}", embed.description)
+
     def test_public_card_publish_option_defaults_private(self):
         from inspect import signature
-        command = bot.tree.get_command("straindb")
-        self.assertIs(signature(command.callback).parameters["public"].default, False)
+        for name in ("straindb", "strainsources"):
+            command = bot.tree.get_command(name)
+            self.assertIs(signature(command.callback).parameters["public"].default, False)
 
     def test_manager_controls_are_registered(self):
         commands = {c.name: c for c in bot.tree.get_commands()}
