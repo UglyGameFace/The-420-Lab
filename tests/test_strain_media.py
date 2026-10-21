@@ -132,18 +132,33 @@ class RichProfilePictureTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.temp.cleanup)
         self.store = StrainProfileStore(self.temp.name + "/profiles.sqlite3")
 
-    async def test_generic_photo_is_labeled_not_a_specific_cultivar(self):
+    async def test_generic_photo_never_appears_as_named_cultivar(self):
         bot = SimpleNamespace(http_session=None, quota=MagicMock(),
                               strain_profiles=self.store, strain_photo_service=None)
         with patch("lab.profile_reply.sourced_summary", new_callable=AsyncMock,
-                   return_value="Source notes"), patch(
+                   return_value="No extra source confirmed."), patch(
                    "lab.cannlytics_client.strain_summary", new_callable=AsyncMock,
                    return_value=""):
-            embed = await build_strain_profile(bot, "Blue Dream", 901)
-        self.assertIn("CannabisBud.jpg", embed.image.url)
+            embed = await build_strain_profile(bot, "Northern Lights", 901)
+        self.assertIsNone(embed.image.url)
         fields = {entry.name: entry.value for entry in embed.fields}
-        self.assertIn("Not verified as Blue Dream", fields["📷 Real cannabis flower photograph"])
-        self.assertIn("Thomas Elliott", fields["📷 Real cannabis flower photograph"])
+        self.assertIn("No photo verified", fields["Photo verification"])
+        self.assertNotIn("📷 Real cannabis flower photograph", fields)
+        self.assertNotIn("temporarily unavailable", "\n".join(str(x.value) for x in embed.fields))
+        self.assertIn("Additional source status", fields)
+
+    async def test_real_source_summary_is_preserved_without_pseudo_photo(self):
+        bot = SimpleNamespace(http_session=None, quota=MagicMock(),
+                              strain_profiles=self.store, strain_photo_service=None)
+        with patch("lab.profile_reply.sourced_summary", new_callable=AsyncMock,
+                   return_value="**Flower & Freedom:** Northern Lights"), patch(
+                   "lab.cannlytics_client.strain_summary", new_callable=AsyncMock,
+                   return_value=""):
+            embed = await build_strain_profile(bot, "Northern Lights", 901)
+        fields = {entry.name: entry.value for entry in embed.fields}
+        self.assertIn("Source-confirmed details & community reports", fields)
+        self.assertIn("Flower & Freedom", fields["🧬 Source-confirmed details & community reports"])
+        self.assertIsNone(embed.image.url)
 
     async def test_original_curated_photo_is_not_overwritten(self):
         self.store.save_curated(

@@ -425,3 +425,19 @@ https://docs.cannlytics.com/api/data/strains/
 Live Pexels and Cannlytics calls have not been verified in the owner
 deployment because their respective secret API keys are not connected.
 Generic Commons photography is the built-in backup.
+
+
+### Corrected strain profiles: photo and identity accuracy
+
+The Weed Doctor does **not** attach generic Wikimedia Commons / Pexels bud
+photos to named strains anymore. Only owner-supplied, source-credited imagery
+is eligible for the named profile, marked as owner-submitted identification.
+Unverified strain photos are omitted rather than mislabelled. External named
+strain pages are linked for viewing their own photographs.
+
+Strain classification, lineage, and breeder listings are source-specific,
+not guarantees of the genetics a particular member owns. The Northern Lights
+profile now distinguishes Leafly / Sensi Seeds indica references from the
+historical Kushy Hybrid label and the CI commercial breeder listing. Missing
+remote providers are collapsed into a single neutral status, not shown as
+research facts.

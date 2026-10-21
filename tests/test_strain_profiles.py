@@ -89,6 +89,25 @@ class StrainProfileTests(unittest.TestCase):
         self.path = str(Path(self.temp.name) / "strain-profile.sqlite3")
         self.store = StrainProfileStore(self.path)
 
+    def test_northern_lights_does_not_misrepresent_hybrid_and_breeder(self):
+        embed = strain_embed("Northern Lights", 999, self.store)
+        fields = {entry.name: entry.value for entry in embed.fields}
+        identity = fields["Source-specific identity"]
+        self.assertIn("Indica / indica-dominant", identity)
+        self.assertIn("https://www.leafly.com/strains/northern-lights", identity)
+        self.assertIn("Archived Kushy 2017 label:** Hybrid", identity)
+        self.assertIn("not verified genetics", identity)
+        self.assertIn("not necessarily the original breeder", identity)
+        self.assertNotIn("**Catalog type:** Hybrid", identity)
+        self.assertIsNone(embed.image.url)
+
+    def test_source_specific_labels_for_other_strains(self):
+        embed = strain_embed("Blue Dream", 999, self.store)
+        identity = next(item.value for item in embed.fields
+                        if item.name == "Source-specific identity")
+        self.assertIn("Name found in", identity)
+        self.assertNotIn("**Catalog type:**", identity)
+
     def test_missing_license_keeps_external_image_and_description_offline(self):
         embed = strain_embed("Blue Dream", 999, self.store)
         self.assertIsNone(embed.image.url)

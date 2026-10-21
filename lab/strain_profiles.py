@@ -308,6 +308,7 @@ def source_directory_embed():
 def strain_embed(name: str, guild_id: int | None, store: StrainProfileStore):
     import discord
     from .leafly import profile_for, leafly_search_url
+    from .cultivar_facts import reference_lines
     matches = find_matches(name, limit=3)
     exact = matches and compact(matches[0].name) == compact(name) and not matches[0].approximate
     display = matches[0].name if exact else name
@@ -316,11 +317,28 @@ def strain_embed(name: str, guild_id: int | None, store: StrainProfileStore):
         color=0x127B52)
     if exact:
         first = matches[0]
-        facts = (f"**Catalog type:** {first.kind}\n"
-                 f"**Source:** {', '.join(first.sources)}")
-        if first.breeder and first.breeder.lower() not in ("unknown breeder", "none"):
-            facts += f"\n**Listed breeder:** {first.breeder}"
-        embed.add_field(name="Name reference", value=facts[:950], inline=False)
+        # Historical catalog classifications and commercial breeder entries
+        # are NOT authoritative identities for every variant of a strain.
+        source_list = ", ".join(first.sources)
+        facts = [f"**Name found in:** {source_list}"]
+        facts.extend(reference_lines(display))
+        if first.kind and first.kind.casefold() not in ("catalog listing", "unknown", "none"):
+            type_from = "Kushy 2017" if "Kushy 2017" in first.sources else source_list
+            facts.append(
+                f"**Archived {type_from} label:** {first.kind} "
+                "(a source-specific label, not verified genetics)"
+            )
+        if first.breeder and first.breeder.casefold() not in (
+                "unknown breeder", "none", "null"):
+            breeder_source = ("CI-Strains-Pro 2026"
+                              if "CI-Strains-Pro 2026" in first.sources
+                              else source_list)
+            facts.append(
+                f"**Commercial breeder listed by {breeder_source}:** "
+                f"{first.breeder[:60]} (not necessarily the original breeder)"
+            )
+        embed.add_field(
+            name="Source-specific identity", value="\n".join(facts)[:1024], inline=False)
     else:
         embed.add_field(name="Name not verified", value=(
             "No exact catalog match. Try /straininfo for spelling suggestions. "
@@ -334,10 +352,15 @@ def strain_embed(name: str, guild_id: int | None, store: StrainProfileStore):
                         inline=False)
         if image_url:
             embed.set_image(url=image_url)
+            embed.add_field(name="📷 Owner-supplied strain photo",
+                            value=(f"[Photo provenance]({url}) • declared {rights} • "
+                                   "Owner-submitted identification, not independently "
+                                   "authenticated from the image."), inline=False)
     else:
-        embed.add_field(name="Description & photo", value=(
-            "No curated summary or picture has been added for this strain yet. "
-            "Open its source profile above for more details and photos."), inline=False)
+        embed.add_field(name="Photo verification", value=(
+            "No photo verified for this specific named cultivar. "
+            "The bot will not substitute an unrelated cannabis flower picture. "
+            "Open an attributed source profile for its own photos."), inline=False)
     profile = profile_for(display)
     if profile:
         embed.add_field(name="Leafly community profile",

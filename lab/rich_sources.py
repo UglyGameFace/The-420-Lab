@@ -38,5 +38,4 @@ async def sourced_summary(session, quota, name: str) -> str:
     fallback = await strainapi(session, quota, name)
     if fallback.startswith("**"):
         return fallback[:1024]
-    return (first[:180] + "\n" + community[:180] + "\n" +
-            second[:180] + "\n" + fallback[:180])[:1024]
+    return "No additional independently confirmed source record available."

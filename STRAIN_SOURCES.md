@@ -110,3 +110,25 @@ timeout and uses the same global research-API safety allowance.
 The public Find Strains modal and /strainprofile use the same rich
 profile presentation. The local index size in /straindb never counts
 remote results as newly stored entries.
+
+
+## Photo identity & catalog accuracy correction (October 2026)
+
+Named strain profiles no longer receive unrelated Wikimedia Commons or Pexels
+flower pictures as fallback imagery. The shared `/strainprofile` and Find Strains
+card only embeds an owner-supplied credited cultivar image, and labels it
+owner-submitted rather than independently proven. Source profile links remain
+for photo browsing, but a generic shot is not evidence of strain identity.
+
+Archived catalog labels and breeder entries are now explicitly source-specific:
+one legacy type or a single commercial seed-bank listing does not establish
+the classification and origin of all named variants. For Northern Lights,
+independent [Leafly](https://www.leafly.com/strains/northern-lights) and
+[Sensi Seeds](https://sensiseeds.com/en/regular/northern-lights-3) listings
+support indica / indica-dominant, while the old Kushy row says Hybrid.
+Disagreement is shown, not silently flattened into one label.
+
+When enrichment providers do not respond with a verified exact match, the bot
+shows one useful status instead of four competing error strings. No status is
+misrepresented as a strain detail. Generic photographs may still be used
+outside named strain profiles with proper credits.
