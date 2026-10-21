@@ -1,5 +1,6 @@
 """Regression coverage for the age-restricted, staff-moderated Grower Showcase."""
 from io import BytesIO
+import asyncio
 from datetime import datetime, timedelta, timezone
 import sqlite3
 import tempfile
@@ -363,6 +364,13 @@ class GrowerCommandsTests(unittest.TestCase):
 
 
 class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        # unittest.IsolatedAsyncioTestCase creates a fresh event loop per case.
+        # Test with a fresh bot slot too; production has one active client loop.
+        slots = patch.object(bot, "grower_image_slots", asyncio.Semaphore(1))
+        slots.start()
+        self.addCleanup(slots.stop)
+
     async def test_withdraw_uses_original_channels_after_manager_reconfigures(self):
         from lab.grower_commands import _remove_submission
         with tempfile.TemporaryDirectory() as directory:
