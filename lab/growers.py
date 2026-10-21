@@ -19,6 +19,7 @@ from .strains import compact, find_matches
 STAGES = ("seedling", "vegetative", "flowering", "harvest")
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_PIXELS = 8_000_000
+RECOVERY_AFTER = timedelta(minutes=5)
 
 
 def verified_strain(name: str) -> str:
@@ -76,7 +77,13 @@ class GrowerHub:
                 review_message TEXT NOT NULL, gallery_message TEXT,
                 status TEXT NOT NULL DEFAULT 'pending',
                 created_utc TEXT NOT NULL, review_channel TEXT NOT NULL,
-                gallery_channel TEXT)""")
+                gallery_channel TEXT, operation_utc TEXT NOT NULL DEFAULT '')""")
+            # Existing deployments have this table without the operation timestamp.
+            # Migrate in place; never rebuild or discard submissions.
+            columns = {column[1] for column in db.execute("PRAGMA table_info(grower_submissions)")}
+            if "operation_utc" not in columns:
+                db.execute("""ALTER TABLE grower_submissions
+                    ADD COLUMN operation_utc TEXT NOT NULL DEFAULT ''""")
             db.execute("""CREATE INDEX IF NOT EXISTS idx_grower_pending
                 ON grower_submissions(guild,status,id)""")
             db.execute("""CREATE INDEX IF NOT EXISTS idx_grower_author
@@ -155,6 +162,52 @@ class GrowerHub:
                 FROM grower_submissions WHERE guild=? AND id=?""",
                 (str(guild_id), submission_id)).fetchone()
 
+    @staticmethod
+    def _stale(value: str) -> bool:
+        """Legacy empty timestamps are treated as interrupted operations."""
+        cutoff = (datetime.now(timezone.utc) - RECOVERY_AFTER).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return not value or value < cutoff
+
+    def interrupted(self, guild_id: int):
+        """Only stale non-final states; ordinary ongoing requests are not shown."""
+        with closing(self.profiles._connect()) as db:
+            rows = db.execute(
+                """SELECT id,status,operation_utc FROM grower_submissions
+                WHERE guild=? AND status IN ('reviewing','removing')
+                ORDER BY id LIMIT 20""", (str(guild_id),)).fetchall()
+        return [(id, status) for id, status, operation in rows if self._stale(operation)]
+
+    def review_is_interrupted(self, guild_id: int, submission_id: int) -> bool:
+        with closing(self.profiles._connect()) as db:
+            row = db.execute(
+                """SELECT status,operation_utc FROM grower_submissions
+                WHERE guild=? AND id=?""", (str(guild_id), submission_id)).fetchone()
+        return bool(row and row[0] == "reviewing" and self._stale(row[1]))
+
+    def prepare_review(self, guild_id: int, submission_id: int, gallery_channel: int):
+        """Record publication destination BEFORE sending a gallery post."""
+        with closing(self.profiles._connect()) as db, db:
+            changed = db.execute(
+                """UPDATE grower_submissions SET gallery_channel=?
+                WHERE guild=? AND id=? AND status='reviewing'""",
+                (str(gallery_channel), str(guild_id), submission_id)).rowcount
+            if changed != 1:
+                raise ValueError("The review state changed before publication.")
+
+    def requeue_interrupted_review(self, guild_id: int, submission_id: int):
+        """Only call after a moderator confirms the photo was NOT published."""
+        with closing(self.profiles._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT status,operation_utc FROM grower_submissions
+                WHERE guild=? AND id=?""", (str(guild_id), submission_id)).fetchone()
+            if not row or row[0] != "reviewing" or not self._stale(row[1]):
+                raise ValueError("The review is not interrupted or is still running.")
+            db.execute(
+                """UPDATE grower_submissions SET status='pending', gallery_channel=NULL,
+                operation_utc='' WHERE guild=? AND id=?""",
+                (str(guild_id), submission_id))
+
     def lock(self, guild_id: int, submission_id: int, *,
              purpose: str, user_id: int | None = None):
         if purpose not in ("review", "remove"):
@@ -168,13 +221,23 @@ class GrowerHub:
                           review_message,gallery_message,status,review_channel,gallery_channel
                 FROM grower_submissions WHERE guild=? AND id=?""",
                 (str(guild_id), submission_id)).fetchone()
-            if not item or item[8] not in allowed:
-                raise ValueError("Submission not found or already being reviewed.")
+            if not item:
+                raise ValueError("Submission not found.")
             if user_id is not None and item[1] != self._identity(guild_id, user_id):
                 raise ValueError("You may only withdraw your own submissions.")
+            if item[8] not in allowed:
+                if not (purpose == "remove" and item[8] == "removing"):
+                    raise ValueError("Submission is already being processed.")
+                prior = db.execute(
+                    "SELECT operation_utc FROM grower_submissions WHERE guild=? AND id=?",
+                    (str(guild_id), submission_id)).fetchone()[0]
+                if not self._stale(prior):
+                    raise ValueError("A removal is already in progress. Try again in five minutes.")
+            started = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             db.execute(
-                "UPDATE grower_submissions SET status=? WHERE guild=? AND id=?",
-                (status, str(guild_id), submission_id))
+                """UPDATE grower_submissions SET status=?,operation_utc=?
+                WHERE guild=? AND id=?""",
+                (status, started, str(guild_id), submission_id))
             return item
 
     def unlock(self, guild_id: int, submission_id: int, old_status: str):
@@ -182,7 +245,7 @@ class GrowerHub:
             raise ValueError("Unsupported recovery status")
         with closing(self.profiles._connect()) as db, db:
             db.execute(
-                """UPDATE grower_submissions SET status=?
+                """UPDATE grower_submissions SET status=?,operation_utc=''
                 WHERE guild=? AND id=? AND status IN ('reviewing','removing')""",
                 (old_status, str(guild_id), submission_id))
 
@@ -191,7 +254,7 @@ class GrowerHub:
         with closing(self.profiles._connect()) as db, db:
             count = db.execute(
                 """UPDATE grower_submissions
-                SET status='approved', gallery_message=?, gallery_channel=?
+                SET status='approved', gallery_message=?, gallery_channel=?, operation_utc=''
                 WHERE guild=? AND id=? AND status='reviewing'""",
                 (str(gallery_message), str(gallery_channel), str(guild_id), submission_id)).rowcount
             if count != 1:
