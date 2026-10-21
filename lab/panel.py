@@ -180,13 +180,21 @@ class StrainQueryModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         if not await interaction.client.admit_interaction(interaction):
             return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        from .profile_reply import build_strain_profile
         name = str(self.search_term.value)
-        await interaction.response.send_message(
-            "Use /straindb to see catalog size and updates. "
-            "Details below are tied to cited sources, not universal medical effects.",
-            embed=strain_embed(name, interaction.guild_id,
-                               interaction.client.strain_profiles),
-            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        try:
+            embed = await build_strain_profile(
+                interaction.client, name, interaction.guild_id)
+        except Exception:
+            log.exception("Panel strain lookup failed")
+            await interaction.followup.send(
+                "The strain profile is temporarily unavailable. Use /straininfo instead.",
+                ephemeral=True)
+            return
+        await interaction.followup.send(
+            embed=embed, ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none())
 
 
 class PapersModal(discord.ui.Modal):

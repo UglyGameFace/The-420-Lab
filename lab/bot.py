@@ -19,6 +19,7 @@ from .strains import result_text as strain_result_text
 from .leafly import leafly_reference, leafly_answer
 from .strain_profiles import StrainProfileStore, database_embed, strain_embed, source_directory_embed
 from .rich_sources import sourced_summary
+from .profile_reply import build_strain_profile
 from .health import LabHealth
 from .quotas import QuotaGate, QuotaExceeded
 from .control import OwnerControlView, panel as owner_panel
@@ -367,22 +368,13 @@ async def strainprofile(interaction: discord.Interaction, name: app_commands.Ran
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
     try:
-        embed = strain_embed(name, interaction.guild_id, bot.strain_profiles)
+        embed = await build_strain_profile(bot, name, interaction.guild_id)
     except Exception:
         logger.exception("Strain profile lookup failed")
         await interaction.followup.send(
-            "Strain profile storage is unavailable. Try /straininfo for the offline catalog.",
+            "Profile storage is unavailable. Try /straininfo for the offline catalog.",
             ephemeral=True)
         return
-    try:
-        research = await sourced_summary(bot.http_session, bot.quota, name)
-    except Exception:
-        logger.exception("CannaLib preview failed without exposing provider details")
-        research = "Independent research is temporarily unavailable."
-    embed.add_field(
-        name="🧬 Independently sourced cultivar facts",
-        value=research[:1024],
-        inline=False)
     await interaction.followup.send(
         embed=embed, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
