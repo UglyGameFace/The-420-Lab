@@ -9,6 +9,7 @@ from .sources import COMPOUNDS
 from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS
 from .strains import result_text as strain_result_text
+from .leafly import leafly_answer
 if TYPE_CHECKING:
     from .bot import LabBot
 log = logging.getLogger(__name__)
@@ -174,7 +175,7 @@ class StrainQueryModal(discord.ui.Modal):
         if not await interaction.client.admit_interaction(interaction):
             return
         await interaction.response.send_message(
-            strain_result_text(str(self.search_term.value)), ephemeral=True,
+            leafly_answer(str(self.search_term.value)), ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none())
 
 
