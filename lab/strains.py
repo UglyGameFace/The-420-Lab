@@ -42,6 +42,21 @@ def load_modern_catalog() -> tuple[tuple[str, str, str], ...]:
     return tuple(tuple(item) for item in payload["records"])
 
 @lru_cache(maxsize=1)
+def load_leafly_name_mirror() -> tuple[str, ...]:
+    """Historical strain names only; never pull proprietary reviews or images."""
+    with (DATA / "leafly_names_legacy.json").open(encoding="utf-8") as file:
+        payload = json.load(file)
+    if (payload.get("schema") != 1 or
+        payload.get("upstream_git_blob") != "7a3a3a6136efc56f8ebb53b8d183e2c81b0cdf94" or
+        payload.get("rows_in_original") != 4762):
+        raise ValueError("Historical Leafly name mirror provenance mismatch")
+    records = payload.get("records")
+    if not isinstance(records, list) or len(records) > 4762:
+        raise ValueError("Unexpected historical Leafly name list size")
+    return tuple(records)
+
+
+@lru_cache(maxsize=1)
 def _index() -> tuple[dict[str, StrainMatch], dict[str, str]]:
     results: dict[str, StrainMatch] = {}
     aliases: dict[str, str] = {}
@@ -64,6 +79,14 @@ def _index() -> tuple[dict[str, StrainMatch], dict[str, str]]:
         aka = compact(alias)
         if aka and aka != key and len(aka) >= 3:
             aliases.setdefault(aka, key)
+    # Factual name-only supplement recovered from an older third-party
+    # mirror. Never replace the higher-priority licensed Kushy / CI records.
+    for name in load_leafly_name_mirror():
+        key = compact(name)
+        if key and key not in results:
+            results[key] = StrainMatch(
+                name, "Historical name listing", "",
+                ("Leafly-name mirror (historical, third-party; unverified)",))
     return results, aliases
 
 def find_matches(query: str, *, limit: int = 5) -> list[StrainMatch]:
@@ -116,9 +139,9 @@ def _safe(value: str, maximum: int = 95) -> str:
 def result_text(query: str) -> str:
     matches = find_matches(query)
     lines = ["**The Weed Doctor | Strain Name Finder**",
-             "Catalog name references from 2017 and 2026, not lab-tested products."]
+             "Searchable historical names from three catalog sources, not lab-tested products."]
     if not matches:
-        lines.append("No name found in either catalog. Try another spelling, "
+        lines.append("No name found in the available catalogs. Try another spelling, "
                      "an abbreviated name or a breeder's listing name.")
     else:
         lines.append("**Possible spelling suggestions (not exact matches):**"
@@ -137,6 +160,8 @@ def result_text(query: str) -> str:
         "may represent multiple products rather than unique verified cultivars.",
         "2017 MIT data: " + SOURCE,
         "2026 CC BY 4.0 data: " + NEW_SOURCE,
+        "Historic Leafly name mirror (names only, not a Leafly partnership): "
+        "https://github.com/iboc/cannabis/blob/main/leafly_strain_data.csv",
         "Research on label reliability: " + SCIENCE,
     ])
     return "\n".join(lines)
