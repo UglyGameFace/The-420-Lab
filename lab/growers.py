@@ -7,7 +7,7 @@ digest and a contributor-selected public byline, not Discord member IDs.
 from __future__ import annotations
 
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 import re
 import sqlite3
@@ -67,7 +67,7 @@ class GrowerHub:
         with closing(self.profiles._connect()) as db, db:
             db.execute("""CREATE TABLE IF NOT EXISTS grower_config (
                 guild TEXT PRIMARY KEY, review_channel TEXT NOT NULL,
-                gallery_channel TEXT NOT NULL)""")
+                gallery_channel TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1)""")
             db.execute("""CREATE TABLE IF NOT EXISTS grower_submissions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 guild TEXT NOT NULL, author_hash TEXT NOT NULL,
@@ -84,25 +84,26 @@ class GrowerHub:
     def configuration(self, guild_id: int):
         with closing(self.profiles._connect()) as db:
             return db.execute(
-                "SELECT review_channel,gallery_channel FROM grower_config WHERE guild=?",
+                "SELECT review_channel,gallery_channel,enabled FROM grower_config WHERE guild=?",
                 (str(guild_id),)).fetchone()
 
-    def configure(self, guild_id: int, review_id: int, gallery_id: int):
+    def configure(self, guild_id: int, review_id: int, gallery_id: int, enabled: bool = True):
         if review_id == gallery_id:
             raise ValueError("The private review and public gallery channels must differ.")
         with closing(self.profiles._connect()) as db, db:
-            db.execute("""INSERT INTO grower_config VALUES(?,?,?)
+            db.execute("""INSERT INTO grower_config VALUES(?,?,?,?)
                 ON CONFLICT(guild) DO UPDATE SET
                 review_channel=excluded.review_channel,
-                gallery_channel=excluded.gallery_channel""",
-                (str(guild_id), str(review_id), str(gallery_id)))
+                gallery_channel=excluded.gallery_channel,
+                enabled=excluded.enabled""",
+                (str(guild_id), str(review_id), str(gallery_id), int(enabled)))
 
     def _identity(self, guild_id: int, user_id: int) -> str:
         return self.profiles.member_hash(guild_id, user_id)
 
     def submit(self, guild_id: int, user_id: int, byline: str,
                strain: str, stage: str, caption: str, review_message: int) -> int:
-        if not self.configuration(guild_id):
+        if not (self.configuration(guild_id) and self.configuration(guild_id)[2]):
             raise ValueError("Grower Showcase has not been configured in this server.")
         name = verified_strain(strain)
         if stage not in STAGES:
@@ -113,14 +114,10 @@ class GrowerHub:
         created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         with closing(self.profiles._connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
-            daily, pending = db.execute(
-                """SELECT COUNT(*) FILTER (WHERE created_utc >= datetime('now', '-1 day')),
-                   COUNT(*) FILTER (WHERE status='pending')
-                   FROM grower_submissions WHERE guild=? AND author_hash=?""",
-                (str(guild_id), identity)).fetchone()
-            # SQLite datetime() formatting differs from ISO "T" timestamps:
-            # compare ISO-formatted values with an ISO-formatted cutoff instead.
-            from datetime import timedelta
+            pending = db.execute(
+                "SELECT COUNT(*) FROM grower_submissions "
+                "WHERE guild=? AND author_hash=? AND status='pending'",
+                (str(guild_id), identity)).fetchone()[0]
             cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
                 "%Y-%m-%dT%H:%M:%SZ")
             daily = db.execute(
