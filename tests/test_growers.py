@@ -62,14 +62,14 @@ class GrowerStoreTests(unittest.TestCase):
 
     def submit(self, user=123, strain="Blue Dream", stage="flowering", message=1001):
         return self.hub.submit(self.guild, user, "GardenGamer", strain,
-                               stage, "Real progress photo", message)
+                               stage, "Real progress photo", message, 101)
 
     def test_server_opt_in_and_suspension(self):
         self.assertEqual(self.hub.configuration(self.guild), ("101", "102", 1))
         with self.assertRaises(ValueError):
             self.hub.configure(self.guild, 101, 101)
         with self.assertRaises(ValueError):
-            self.hub.submit(999, 123, "User", "Blue Dream", "flowering", "", 50)
+            self.hub.submit(999, 123, "User", "Blue Dream", "flowering", "", 50, 101)
         self.hub.configure(self.guild, 101, 102, enabled=False)
         with self.assertRaises(ValueError):
             self.submit()
@@ -83,18 +83,21 @@ class GrowerStoreTests(unittest.TestCase):
         self.assertEqual(self.hub.my_uploads(self.guild, 123)[0][0], item_id)
         self.assertEqual(self.hub.my_uploads(self.guild, 999), [])
         self.assertEqual(self.hub.pending(self.guild)[0][0], item_id)
+        self.assertEqual(self.hub.pending(self.guild)[0][5], "101")
         locked = self.hub.lock(self.guild, item_id, purpose="review")
         self.assertEqual(locked[8], "pending")
         with self.assertRaises(ValueError):
             self.hub.lock(self.guild, item_id, purpose="review")
-        self.hub.approve(self.guild, item_id, 5001)
+        self.hub.approve(self.guild, item_id, 5001, 102)
         self.assertEqual(self.hub.item(self.guild, item_id)[8], "approved")
         self.assertEqual(self.hub.item(self.guild, item_id)[7], "5001")
+        self.assertEqual(self.hub.item(self.guild, item_id)[9:], ("101", "102"))
         self.assertEqual(self.hub.stats(self.guild, 123),
                          (1, 0, 1, "🌱 First Showcase"))
         journal = self.hub.journal(self.guild, 123, "Blue Dream")
         self.assertEqual(len(journal), 1)
         self.assertEqual(journal[0][4], "5001")
+        self.assertEqual(journal[0][6], "102")
         self.assertFalse(self.hub.journal(self.guild, 999))
         self.assertEqual(self.hub.stats(self.guild, 999)[:3], (0, 0, 0))
         self.assertFalse(self.hub.pending(self.guild))
@@ -119,10 +122,26 @@ class GrowerStoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.submit(message=1009)
         with self.assertRaises(ValueError):
-            self.hub.submit(self.guild, 101, "Me", "Blue Dreem", "flowering", "", 99)
+            self.hub.submit(self.guild, 101, "Me", "Blue Dreem", "flowering", "", 99, 101)
         with self.assertRaises(ValueError):
-            self.hub.submit(self.guild, 101, "Me", "Blue Dream", "purchase", "", 99)
+            self.hub.submit(self.guild, 101, "Me", "Blue Dream", "purchase", "", 99, 101)
         self.assertEqual(len(self.hub.pending(self.guild)), 3)
+
+    def test_channel_reconfiguration_preserves_previous_submission_locations(self):
+        first_id = self.submit()
+        self.hub.configure(self.guild, 201, 202)
+        old = self.hub.lock(self.guild, first_id, purpose="review")
+        self.assertEqual(old[9], "101")
+        self.hub.approve(self.guild, first_id, 5001, 202)
+        self.assertEqual(self.hub.journal(self.guild, 123)[0][6], "202")
+        self.hub.configure(self.guild, 301, 302)
+        row = self.hub.lock(self.guild, first_id, purpose="remove", user_id=123)
+        self.assertEqual(row[9], "101")
+        self.assertEqual(row[10], "202")
+        self.hub.delete(self.guild, first_id, "removing")
+        self.assertIsNone(self.hub.item(self.guild, first_id))
+        with self.assertRaises(ValueError):
+            self.hub.submit(self.guild, 555, "Grower", "Blue Dream", "harvest", "", 5, 101)
 
     def test_anonymized_identity_does_not_store_discord_user_id(self):
         self.submit(user=987654321987654321)
