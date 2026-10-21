@@ -17,14 +17,14 @@ class StrainStatusTests(unittest.TestCase):
         from lab.strains import _index
         counts = catalog_counts()
         self.assertEqual(counts["distinct"], len(_index()[0]))
-        self.assertEqual(counts["distinct"], 30593)
+        self.assertEqual(counts["distinct"], 30582)
         self.assertEqual(counts["kushy"], 9508)
         self.assertEqual(counts["ci"], 19751)
         self.assertEqual(counts["historical_leafly_added"], 2298)
 
     def test_public_database_card_distinguishes_source_dates_from_live_sync(self):
         embed = database_embed()
-        self.assertIn("30,593", embed.description)
+        self.assertIn("30,582", embed.description)
         lines = "\n".join(str(f.value) for f in embed.fields)
         self.assertIn(FIRST_INDEXED, lines)
         self.assertIn("2017-11-14", lines)

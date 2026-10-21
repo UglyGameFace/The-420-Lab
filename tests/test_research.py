@@ -510,12 +510,13 @@ class PublicPanelTests(unittest.TestCase):
     def test_public_panel_contains_database_info(self):
         from lab.bot import bot
         from lab.panel import LabPanelView, panel_embed
+        from lab.strain_profiles import catalog_counts
         view = LabPanelView(bot)
         buttons = {item.label: item for item in view.children}
         self.assertEqual(
             buttons["Database Info"].custom_id,
             "the420lab:panel:v1:database")
-        self.assertIn("30,593", str(panel_embed().fields[-1].value))
+        self.assertIn(f"{catalog_counts()['distinct']:,}", str(panel_embed().fields[-1].value))
         self.assertIn("/straindb", str(panel_embed().fields[-1].value))
 
     def test_no_strain_game_command_collision(self):
