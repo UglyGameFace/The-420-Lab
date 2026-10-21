@@ -79,24 +79,27 @@ async def _remove_message(channel: discord.TextChannel, message_id: int, bot) ->
 
 
 async def _remove_submission(interaction: discord.Interaction, bot, submission_id: int,
-                             *, user_id: int | None) -> None:
+                             *, user_id: int | None, purpose: str = "remove") -> None:
     hub = bot.growers
-    row = hub.lock(interaction.guild_id, submission_id, purpose="remove", user_id=user_id)
+    row = hub.lock(interaction.guild_id, submission_id, purpose=purpose, user_id=user_id)
+    deletion_started = False
     try:
         if row[7]:
             if not row[10]:
                 raise ValueError("The saved gallery channel is missing; contact staff.")
             gallery = await _saved_channel(interaction, row[10])
             if gallery:
+                deletion_started = True
                 await _remove_message(gallery, int(row[7]), bot)
         review = await _saved_channel(interaction, row[9])
         if review:
+            deletion_started = True
             await _remove_message(review, int(row[6]), bot)
         hub.delete(interaction.guild_id, submission_id, "removing")
     except Exception:
-        # A restart may resume a partially completed removal. Keep its durable
-        # state on a retry failure; otherwise return the original state.
-        if row[8] in ("pending", "approved"):
+        # Once a Discord delete starts, its result may be uncertain. Keep the
+        # durable removal state for an idempotent staff/member retry.
+        if not deletion_started and row[8] in ("pending", "approved"):
             hub.unlock(interaction.guild_id, submission_id, row[8])
         raise
 
@@ -259,6 +262,22 @@ def register_grower_commands(bot) -> None:
             await interaction.response.send_message("Use a valid submission number.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
+        if not approve:
+            try:
+                await _remove_submission(interaction, bot, id, user_id=None, purpose="reject")
+            except ValueError as exc:
+                await interaction.followup.send(str(exc), ephemeral=True)
+            except Exception:
+                log.exception("Grower rejection did not finish")
+                await interaction.followup.send(
+                    "Rejection could not be confirmed. Do not retry immediately; use "
+                    "/growerqueue and /growerrecover if the removal was interrupted.",
+                    ephemeral=True)
+            else:
+                await interaction.followup.send(
+                    f"Submission **#{id}** rejected and deleted.",
+                    ephemeral=True, allowed_mentions=NO_MENTIONS)
+            return
         hub = bot.growers
         review_message = None
         gallery_message = None
@@ -301,10 +320,6 @@ def register_grower_commands(bot) -> None:
                         except discord.HTTPException:
                             log.exception("Review publication needs manual reconciliation for #%s", id)
                         raise
-                else:
-                    if review:
-                        await _remove_message(review, int(item[6]), bot)
-                    hub.delete(interaction.guild_id, id, "reviewing")
             except Exception:
                 if not publication_uncertain:
                     hub.unlock(interaction.guild_id, id, "pending")
@@ -320,7 +335,7 @@ def register_grower_commands(bot) -> None:
                 "/growerrecover after five minutes.", ephemeral=True)
             return
         await interaction.followup.send(
-            f"Submission **#{id}** {'approved and posted' if approve else 'rejected and deleted'}.",
+            f"Submission **#{id}** approved and posted.",
             ephemeral=True, allowed_mentions=NO_MENTIONS)
 
     @bot.tree.command(name="growerrecover", description="Manager: reconcile an interrupted photo review or removal")
