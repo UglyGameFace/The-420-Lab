@@ -75,7 +75,8 @@ class GrowerHub:
                 stage TEXT NOT NULL, caption TEXT NOT NULL,
                 review_message TEXT NOT NULL, gallery_message TEXT,
                 status TEXT NOT NULL DEFAULT 'pending',
-                created_utc TEXT NOT NULL)""")
+                created_utc TEXT NOT NULL, review_channel TEXT NOT NULL,
+                gallery_channel TEXT)""")
             db.execute("""CREATE INDEX IF NOT EXISTS idx_grower_pending
                 ON grower_submissions(guild,status,id)""")
             db.execute("""CREATE INDEX IF NOT EXISTS idx_grower_author
@@ -102,10 +103,13 @@ class GrowerHub:
         return self.profiles.member_hash(guild_id, user_id)
 
     def submit(self, guild_id: int, user_id: int, byline: str,
-               strain: str, stage: str, caption: str, review_message: int) -> int:
+               strain: str, stage: str, caption: str, review_message: int,
+               review_channel: int) -> int:
         setting = self.configuration(guild_id)
         if not setting or not setting[2]:
             raise ValueError("Grower Showcase has not been configured in this server.")
+        if int(setting[0]) != review_channel:
+            raise ValueError("The review channel changed while uploading. Please retry.")
         name = verified_strain(strain)
         if stage not in STAGES:
             raise ValueError("Select a supported growth stage.")
@@ -129,16 +133,17 @@ class GrowerHub:
                 raise ValueError("Grower uploads are limited to 3 per day and 5 pending.")
             cursor = db.execute(
                 """INSERT INTO grower_submissions
-                (guild,author_hash,byline,strain,stage,caption,review_message,created_utc)
-                VALUES(?,?,?,?,?,?,?,?)""",
+                (guild,author_hash,byline,strain,stage,caption,review_message,
+                 created_utc,review_channel)
+                VALUES(?,?,?,?,?,?,?,?,?)""",
                 (str(guild_id), identity, byline, name, stage, caption,
-                 str(review_message), created))
+                 str(review_message), created, str(review_channel)))
             return cursor.lastrowid
 
     def pending(self, guild_id: int):
         with closing(self.profiles._connect()) as db:
             return db.execute(
-                """SELECT id,byline,strain,stage,review_message FROM grower_submissions
+                """SELECT id,byline,strain,stage,review_message,review_channel FROM grower_submissions
                 WHERE guild=? AND status='pending' ORDER BY id LIMIT 10""",
                 (str(guild_id),)).fetchall()
 
@@ -146,7 +151,7 @@ class GrowerHub:
         with closing(self.profiles._connect()) as db:
             return db.execute(
                 """SELECT id,author_hash,byline,strain,stage,caption,
-                          review_message,gallery_message,status
+                          review_message,gallery_message,status,review_channel,gallery_channel
                 FROM grower_submissions WHERE guild=? AND id=?""",
                 (str(guild_id), submission_id)).fetchone()
 
@@ -160,7 +165,7 @@ class GrowerHub:
             db.execute("BEGIN IMMEDIATE")
             item = db.execute(
                 """SELECT id,author_hash,byline,strain,stage,caption,
-                          review_message,gallery_message,status
+                          review_message,gallery_message,status,review_channel,gallery_channel
                 FROM grower_submissions WHERE guild=? AND id=?""",
                 (str(guild_id), submission_id)).fetchone()
             if not item or item[8] not in allowed:
@@ -181,12 +186,14 @@ class GrowerHub:
                 WHERE guild=? AND id=? AND status IN ('reviewing','removing')""",
                 (old_status, str(guild_id), submission_id))
 
-    def approve(self, guild_id: int, submission_id: int, gallery_message: int):
+    def approve(self, guild_id: int, submission_id: int,
+                gallery_message: int, gallery_channel: int):
         with closing(self.profiles._connect()) as db, db:
             count = db.execute(
-                """UPDATE grower_submissions SET status='approved', gallery_message=?
+                """UPDATE grower_submissions
+                SET status='approved', gallery_message=?, gallery_channel=?
                 WHERE guild=? AND id=? AND status='reviewing'""",
-                (str(gallery_message), str(guild_id), submission_id)).rowcount
+                (str(gallery_message), str(gallery_channel), str(guild_id), submission_id)).rowcount
             if count != 1:
                 raise RuntimeError("Submission review state changed during publication")
 
@@ -213,7 +220,7 @@ class GrowerHub:
         selected = verified_strain(name) if name else ""
         with closing(self.profiles._connect()) as db:
             return db.execute(
-                """SELECT id,strain,stage,caption,gallery_message,created_utc
+                """SELECT id,strain,stage,caption,gallery_message,created_utc,gallery_channel
                 FROM grower_submissions WHERE guild=? AND author_hash=?
                 AND status='approved' AND (?='' OR strain=?)
                 ORDER BY created_utc DESC,id DESC LIMIT 12""",
