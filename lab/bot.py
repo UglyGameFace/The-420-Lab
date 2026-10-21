@@ -17,7 +17,7 @@ from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
 from .leafly import leafly_reference, leafly_answer
-from .strain_profiles import StrainProfileStore, database_embed, strain_embed
+from .strain_profiles import StrainProfileStore, database_embed, strain_embed, source_directory_embed
 from .rich_sources import sourced_summary
 from .health import LabHealth
 from .quotas import QuotaGate, QuotaExceeded
@@ -323,6 +323,23 @@ async def leafly(interaction: discord.Interaction, name: app_commands.Range[str,
         await interaction.response.send_message(
             clip_discord(leafly_answer(name)), ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="strainsources", description="View reliable strain data sources, photo rights and lab-test limitations")
+@app_commands.describe(public="Publish source guide for everyone (Manage Server required)")
+@app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
+async def strainsources(interaction: discord.Interaction, public: bool = False):
+    if public and not (
+        interaction.guild_id is not None and
+        interaction.permissions.manage_guild
+    ):
+        await interaction.response.send_message(
+            "Only members with Manage Server can publish this source guide.",
+            ephemeral=True)
+        return
+    await interaction.response.send_message(
+        embed=source_directory_embed(), ephemeral=not public,
+        allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="straindb", description="See the current Weed Doctor strain index size and source ages")
