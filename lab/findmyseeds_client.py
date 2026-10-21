@@ -101,7 +101,7 @@ async def source_summary(session: aiohttp.ClientSession | None, quota, name: str
         return "Research safety allowance reached; try again later."
     try:
         async with session.get(
-            URL, params={"q": name, "per_page": 5},
+            URL, params={"q": name, "per_page": 5, "sort": "name"},
             allow_redirects=False, timeout=aiohttp.ClientTimeout(total=8)
         ) as response:
             if response.status == 429:
