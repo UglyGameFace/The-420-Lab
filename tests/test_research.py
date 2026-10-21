@@ -313,6 +313,18 @@ class StrainCatalogTests(unittest.TestCase):
         self.assertTrue(results[0].approximate)
         self.assertIn("spelling suggestions", result_text("Animel Face"))
 
+    def test_leafly_references_are_in_strain_results(self):
+        from lab.leafly import leafly_answer
+        for name, slug in (
+            ("Super Boof", "/super-boof"),
+            ("Blue Dream", "/blue-dream"),
+            ("Gelato 41", "/gelato-41"),
+        ):
+            message = leafly_answer(name)
+            self.assertIn("Verified Leafly profile", message)
+            self.assertIn("https://www.leafly.com/strains" + slug, message)
+            self.assertNotIn("THC 25%", message)
+
     def test_lookup_does_not_allow_mass_mentions(self):
         from lab.strains import lookup, result_text
         self.assertEqual(lookup("@everyone"), [])
@@ -373,7 +385,7 @@ class DiscordRegistryTests(unittest.TestCase):
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "straininfo", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "straininfo", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth", "leafly"})
         self.assertFalse(bot.intents.message_content)
 
 
