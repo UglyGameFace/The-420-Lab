@@ -198,6 +198,8 @@ def database_embed():
     embed.add_field(name="Detail sources",
         value=("**Live botanical context:** [CannaLib](https://cannalib.org/api/) " 
                "(read-only attributed lookup; separate from our local count).\n"
+               "**Alternative profiles:** [StrainAPI](https://www.strainapi.com/docs/) " 
+               "(on-demand breeder, lineage and terpene fields, separate from name index).\n"
                "**Community descriptions and photos:** Leafly original pages; "
                "only permission-cleared content is shown inside Discord.\n"
                "**Lab reports:** [Cannlytics public results](" + CANNLYTICS_RESULTS
