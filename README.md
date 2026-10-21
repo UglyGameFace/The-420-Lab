@@ -228,3 +228,23 @@ percentages: the source gives no robust denominators or current
 survey dates. It omits the legacy THC number, photo URLs and descriptions.
 Only configure LEAFLY_LICENSED_CSV_PATH with data that you are authorized
 to incorporate in a publicly accessible bot.
+
+### Activated historical name coverage (2026-10-20)
+
+The Weed Doctor now includes a names-only historical Leafly-mirror supplement
+at data/leafly_names_legacy.json, enabled by default. The recovered mirror
+contains 4,762 CSV rows and 4,754 normalized distinct names. Of those,
+2,298 unique names were missing from our licensed catalogs and are added
+as separate name references, yielding 30,593 distinct names overall.
+
+No Discloud environment switch or third-party API key is required for this
+name-only lookup. Name-only records are labeled as historical third-party
+mirror records, NOT as currently verified official Leafly profiles.
+Existing licensed-source entries take precedence for collisions.
+
+IMPORTANT: This is not activation of the full mirrored CSV. Original
+descriptions, review prose, images, THC numbers and reported effect
+percentages were not incorporated or redistributed. The private CSV
+adapter can still read an authorized full copy when supplied. The GitHub
+mirror has no license granting reuse of those content fields, and Leafly's
+terms prohibit unauthorized redistribution.
