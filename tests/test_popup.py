@@ -24,7 +24,7 @@ class PopupStructureTests(unittest.TestCase):
         compounds = {item.value for item in CannabinoidPicker(bot).choice.options}
         self.assertIn("THC", compounds)
         choices = {item.value for item in library_options()}
-        for value in ("trials", "strain", "papers:all", "papers:randomized",
+        for value in ("trials", "strain", "sources", "database", "papers:all", "papers:randomized",
                       "guide:overview", "fda:epidiolex"):
             self.assertIn(value, choices)
         self.assertLessEqual(len(choices), 25)
@@ -47,6 +47,18 @@ class PopupInteractionTests(unittest.IsolatedAsyncioTestCase):
             await controls[name].callback(interaction)
             response.send_modal.assert_awaited_once()
             response.send_message.assert_not_awaited()
+
+    async def test_source_guide_is_private_and_does_not_spend_api_requests(self):
+        modal = LibraryPicker(bot)
+        modal.choice._values = ["sources"]
+        response = SimpleNamespace(send_message=AsyncMock())
+        interaction = SimpleNamespace(response=response)
+        with patch.object(bot, "admit_interaction", new_callable=AsyncMock) as admit:
+            await modal.on_submit(interaction)
+            admit.assert_not_awaited()
+        self.assertTrue(response.send_message.await_args.kwargs["ephemeral"])
+        content = response.send_message.await_args.kwargs["embed"]
+        self.assertIn("Sources", content.title)
 
     async def test_library_official_guide_needs_no_paid_provider_call(self):
         modal = LibraryPicker(bot)
