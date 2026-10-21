@@ -86,3 +86,11 @@ be independently verified; GitHub deployment status cannot prove it.
 Do not claim a source field exists unless that source returned it. Label
 source dates separately from today's bot release date. Never turn missing
 chemistry into zero or predicted effects into clinical facts.
+
+
+## StrainAPI backup for richer strain profiles
+
+Source: https://www.strainapi.com/docs/
+Terms: https://www.strainapi.com/api-terms/
+
+StrainAPI permits attributed developer-app usage and offers no-key read-only V1 search and strain details. In October 2026 its website listed about 268 profiles. The Weed Doctor now uses it as an exact-name fallback when CannaLib has no usable profile. It provides source-reported lineage, breeder, terpene, aroma and flavor facts with an original-page link. All external requests count against the bot's existing provider quota. It does not bulk copy the provider, embed third-party images, or assume strain-wide potency. The live profile count is separate from the offline name index. Set STRAINAPI_ENABLED=false to turn it off; provider behavior on Discloud has not been inspected directly.
