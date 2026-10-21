@@ -41,6 +41,32 @@ class GrowerPhotoTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             photo_as_jpeg(data.getvalue())
 
+    def test_large_jpeg_downsamples_and_removes_metadata(self):
+        image = Image.new("RGB", (3264, 2448), (25, 116, 68))
+        photo = BytesIO()
+        exif = Image.Exif()
+        exif[270] = "PRIVATE CAMERA MODEL AND LOCATION"
+        image.save(photo, "JPEG", exif=exif)
+        cleaned = photo_as_jpeg(photo.getvalue())
+        with Image.open(BytesIO(cleaned)) as preview:
+            self.assertEqual(preview.format, "JPEG")
+            self.assertLessEqual(max(preview.size), 2048)
+            self.assertFalse(preview.getexif())
+        self.assertNotIn(b"PRIVATE CAMERA", cleaned)
+
+    def test_png_and_webp_are_reencoded_as_plain_rgb_jpeg(self):
+        for format in ("PNG", "WEBP"):
+            with self.subTest(format=format):
+                original = BytesIO()
+                Image.new("RGBA", (256, 180), (31, 112, 64, 255)).save(
+                    original, format=format)
+                cleaned = photo_as_jpeg(original.getvalue())
+                with Image.open(BytesIO(cleaned)) as preview:
+                    self.assertEqual(preview.format, "JPEG")
+                    self.assertEqual(preview.mode, "RGB")
+                    self.assertEqual(preview.size, (256, 180))
+                    self.assertFalse(preview.getexif())
+
     def test_exact_strain_and_safe_captions(self):
         self.assertEqual(verified_strain("Blue Dream").casefold(), "blue dream")
         for name in ("Blue Dreem", "fake made up strain zzz"):
@@ -526,6 +552,92 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
                 await cmd(interaction, "status")
                 self.assertIn("previously verified",
                               interaction.response.send_message.await_args.args[0])
+
+    async def test_photo_processor_refuses_queue_without_reading_attachment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            hub.arm_storage_probe()
+            GrowerHub(StrainProfileStore(store.path)).verify_storage_probe()
+            review = SimpleNamespace(
+                id=101, is_nsfw=lambda: True,
+                permissions_for=lambda _: SimpleNamespace(view_channel=False),
+                send=AsyncMock())
+            interaction = SimpleNamespace(
+                guild_id=22, guild=SimpleNamespace(default_role=object(), me=object()),
+                user=SimpleNamespace(id=400, display_name="Grower"),
+                response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            photo = SimpleNamespace(size=350, read=AsyncMock())
+            await bot.grower_image_slots.acquire()
+            try:
+                with patch.object(bot, "growers", hub), \
+                     patch.dict("os.environ", {"LAB_GROWER_REQUIRE_STORAGE_PROOF": "true"}), \
+                     patch.object(bot, "admit_interaction", new_callable=AsyncMock,
+                                  return_value=True), \
+                     patch("lab.grower_commands.GROWER_IMAGE_QUEUE_WAIT", 0.01), \
+                     patch("lab.grower_commands._configured_channels",
+                           return_value=(review, None, True)), \
+                     patch("lab.grower_commands._post_permissions", return_value=True):
+                    await bot.tree.get_command("growersubmit").callback(
+                        interaction, "Blue Dream", "flowering", photo, True)
+            finally:
+                bot.grower_image_slots.release()
+            photo.read.assert_not_awaited()
+            review.send.assert_not_awaited()
+            self.assertIn("busy", interaction.followup.send.await_args.args[0])
+            self.assertEqual(hub.pending(22), [])
+
+    async def test_photo_slot_covers_discord_send_not_just_processing(self):
+        import asyncio
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            hub.arm_storage_probe()
+            GrowerHub(StrainProfileStore(store.path)).verify_storage_probe()
+            entered, finish = asyncio.Event(), asyncio.Event()
+            async def slow_send(**kwargs):
+                entered.set()
+                await finish.wait()
+                return SimpleNamespace(id=9012)
+            review = SimpleNamespace(
+                id=101, is_nsfw=lambda: True,
+                permissions_for=lambda _: SimpleNamespace(view_channel=False),
+                send=AsyncMock(side_effect=slow_send))
+            def interaction(uid):
+                return SimpleNamespace(
+                    guild_id=22, guild=SimpleNamespace(default_role=object(), me=object()),
+                    user=SimpleNamespace(id=uid, display_name="Grower"),
+                    response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+                    followup=SimpleNamespace(send=AsyncMock()))
+            first, second = interaction(400), interaction(401)
+            first_photo = SimpleNamespace(size=350, read=AsyncMock(return_value=b"source"))
+            second_photo = SimpleNamespace(size=350, read=AsyncMock(return_value=b"source"))
+            with patch.object(bot, "growers", hub), \
+                 patch.dict("os.environ", {"LAB_GROWER_REQUIRE_STORAGE_PROOF": "true"}), \
+                 patch.object(bot, "admit_interaction", new_callable=AsyncMock, return_value=True), \
+                 patch("lab.grower_commands.GROWER_IMAGE_QUEUE_WAIT", 0.02), \
+                 patch("lab.grower_commands._configured_channels",
+                       return_value=(review, None, True)), \
+                 patch("lab.grower_commands._post_permissions", return_value=True), \
+                 patch("lab.grower_commands.photo_as_jpeg", return_value=b"cleaned"):
+                sending = asyncio.create_task(
+                    bot.tree.get_command("growersubmit").callback(
+                        first, "Blue Dream", "flowering", first_photo, True))
+                try:
+                    await asyncio.wait_for(entered.wait(), timeout=3)
+                    await bot.tree.get_command("growersubmit").callback(
+                        second, "Blue Dream", "flowering", second_photo, True)
+                    second_photo.read.assert_not_awaited()
+                    self.assertIn("busy", second.followup.send.await_args.args[0])
+                finally:
+                    finish.set()
+                    await sending
+            self.assertEqual(len(hub.pending(22)), 1)
+            self.assertEqual(hub.pending(22)[0][4], "9012")
+            self.assertEqual(bot.grower_image_slots._value, 1)
 
     async def test_uncertain_upload_send_keeps_reservation_for_recovery(self):
         with tempfile.TemporaryDirectory() as directory:
