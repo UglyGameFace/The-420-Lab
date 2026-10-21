@@ -27,6 +27,20 @@ def _configured_channels(interaction: discord.Interaction, hub):
     return review, gallery, bool(config[2])
 
 
+async def _saved_channel(interaction: discord.Interaction, channel_id: str):
+    """Resolve an original post channel, even after the manager changes settings."""
+    channel = interaction.guild.get_channel(int(channel_id))
+    if channel is None:
+        try:
+            channel = await interaction.client.fetch_channel(int(channel_id))
+        except discord.NotFound:
+            return None  # The channel was deleted; its messages no longer exist.
+    if (not isinstance(channel, discord.TextChannel)
+            or channel.guild.id != interaction.guild_id):
+        raise ValueError("The saved showcase channel cannot be accessed safely.")
+    return channel
+
+
 def _post_permissions(channel: discord.TextChannel, member: discord.Member) -> bool:
     perms = channel.permissions_for(member)
     return all((perms.view_channel, perms.send_messages, perms.attach_files,
@@ -65,12 +79,17 @@ async def _remove_message(channel: discord.TextChannel, message_id: int, bot) ->
 async def _remove_submission(interaction: discord.Interaction, bot, submission_id: int,
                              *, user_id: int | None) -> None:
     hub = bot.growers
-    review, gallery, _ = _configured_channels(interaction, hub)
     row = hub.lock(interaction.guild_id, submission_id, purpose="remove", user_id=user_id)
     try:
         if row[7]:
-            await _remove_message(gallery, int(row[7]), bot)
-        await _remove_message(review, int(row[6]), bot)
+            if not row[10]:
+                raise ValueError("The saved gallery channel is missing; contact staff.")
+            gallery = await _saved_channel(interaction, row[10])
+            if gallery:
+                await _remove_message(gallery, int(row[7]), bot)
+        review = await _saved_channel(interaction, row[9])
+        if review:
+            await _remove_message(review, int(row[6]), bot)
         hub.delete(interaction.guild_id, submission_id, "removing")
     except Exception:
         hub.unlock(interaction.guild_id, submission_id, row[8])
@@ -170,7 +189,7 @@ def register_grower_commands(bot) -> None:
             try:
                 entry_id = bot.growers.submit(
                     interaction.guild_id, interaction.user.id, byline,
-                    name, stage, caption, message.id)
+                    name, stage, caption, message.id, review.id)
             except Exception:
                 await message.delete()
                 raise
@@ -195,12 +214,11 @@ def register_grower_commands(bot) -> None:
     @app_commands.checks.has_permissions(manage_guild=True)
     async def growerqueue(interaction: discord.Interaction):
         try:
-            review, _, _ = _configured_channels(interaction, bot.growers)
             entries = bot.growers.pending(interaction.guild_id)
             rows = [f"**#{eid}** · {strain} ({stage}) · {byline} "
                     f"· [Review photo](https://discord.com/channels/{interaction.guild_id}/"
-                    f"{review.id}/{message_id})"
-                    for eid, byline, strain, stage, message_id in entries]
+                    f"{channel_id}/{message_id})"
+                    for eid, byline, strain, stage, message_id, channel_id in entries]
             result = "\n".join(rows) if rows else "No pending grower photos."
         except Exception:
             log.exception("Grower queue failed")
@@ -223,10 +241,13 @@ def register_grower_commands(bot) -> None:
         review_message = None
         gallery_message = None
         try:
-            review, gallery, _ = _configured_channels(interaction, hub)
             item = hub.lock(interaction.guild_id, id, purpose="review")
             try:
+                review = await _saved_channel(interaction, item[9])
                 if approve:
+                    if review is None:
+                        raise ValueError("The review photo's channel was deleted.")
+                    _, gallery, _ = _configured_channels(interaction, hub)
                     review_message = await review.fetch_message(int(item[6]))
                     if not review_message.attachments or review_message.author.id != bot.user.id:
                         raise ValueError("The original review photo is missing.")
@@ -237,7 +258,7 @@ def register_grower_commands(bot) -> None:
                                                approved=True),
                         file=attachment, allowed_mentions=NO_MENTIONS)
                     try:
-                        hub.approve(interaction.guild_id, id, gallery_message.id)
+                        hub.approve(interaction.guild_id, id, gallery_message.id, gallery.id)
                     except Exception:
                         try:
                             await gallery_message.delete()
@@ -246,7 +267,8 @@ def register_grower_commands(bot) -> None:
                             log.exception("Review publication needs manual reconciliation for #%s", id)
                         raise
                 else:
-                    await _remove_message(review, int(item[6]), bot)
+                    if review:
+                        await _remove_message(review, int(item[6]), bot)
                     hub.delete(interaction.guild_id, id, "reviewing")
             except Exception:
                 if gallery_message is None:
@@ -309,14 +331,13 @@ def register_grower_commands(bot) -> None:
                 ephemeral=True)
             return
         try:
-            _, gallery, _ = _configured_channels(interaction, bot.growers)
             entries = bot.growers.journal(interaction.guild_id, interaction.user.id,
                                          strain or "")
             rows = [f"**{stage.title()}** · {name} · {date[:10]} "
                     f"· [Photo](https://discord.com/channels/{interaction.guild_id}/"
-                    f"{gallery.id}/{message_id})"
+                    f"{channel_id}/{message_id})"
                     + (f" · {caption}" if caption else "")
-                    for _, name, stage, caption, message_id, date in entries]
+                    for _, name, stage, caption, message_id, date, channel_id in entries]
             embed = discord.Embed(
                 title="📷 My Grower Journal",
                 description=("\n".join(rows) if rows else
