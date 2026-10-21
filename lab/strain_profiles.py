@@ -142,6 +142,13 @@ class StrainProfileStore:
                 (str(guild_id),)).fetchone()
         return bool(result and result[0])
 
+    def member_hash(self, guild_id: int, user_id: int) -> str:
+        """Pseudonymous per-server contributor key (no raw Discord member ID)."""
+        with closing(self._connect()) as db:
+            salt = db.execute("SELECT value FROM metadata WHERE key='salt'").fetchone()[0]
+        return hmac.new(bytes.fromhex(salt),
+                        f"{guild_id}:{user_id}".encode(), hashlib.sha256).hexdigest()
+
     def rate(self, guild_id: int, user_id: int, name: str, score: int):
         if type(score) is not int or not 1 <= score <= 5:
             raise ValueError("Rating must be 1–5")
@@ -152,11 +159,7 @@ class StrainProfileStore:
             raise ValueError("Use an exact strain name from the catalog")
         key = compact(name)
         with closing(self._connect()) as db, db:
-            salt = db.execute(
-                "SELECT value FROM metadata WHERE key='salt'").fetchone()[0]
-            identity = hmac.new(bytes.fromhex(salt),
-                                f"{guild_id}:{user_id}".encode(),
-                                hashlib.sha256).hexdigest()
+            identity = self.member_hash(guild_id, user_id)
             db.execute("""INSERT INTO strain_votes VALUES(?, ?, ?, ?, ?)
                 ON CONFLICT(guild,name_key,voter_hash) DO UPDATE SET
                 rating=excluded.rating,updated_utc=excluded.updated_utc""",
