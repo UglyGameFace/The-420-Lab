@@ -140,7 +140,7 @@ Discord's application name and bot account username must also be changed by the 
 
 ## Strain lookup: member instructions
 
-Members have **two obvious routes**: type `/straininfo` and fill in the **name** argument (for example, Northern Lights), or press **🌱 Find Strains** directly on the persistent public panel and enter the name in the form. Research Library → Strain Name Reference is an alternative. Idle Grow Op retains its own `/strain` game command, and The Weed Doctor intentionally does not register `/strain` or `/strains`. Results are private and display up to five closest matches from the **2017** historical MIT-licensed index, not today's verified product chemistry or clinical effects.
+Members have **two obvious routes**: type `/straininfo` and fill in the **name** argument (for example, Northern Lights), or press **🌱 Find Strains** directly on the persistent public panel and enter the name in the form. Research Library → Strain Name Reference is an alternative. Idle Grow Op retains its own `/strain` game command, and The Weed Doctor intentionally does not register `/strain` or `/strains`. Results are private and display up to five matches from both the **2017 MIT** and **2026 CC BY 4.0** name catalogs, with source attribution and non-exact spelling suggestions. Neither catalog provides reliable product-specific chemistry or clinical effects.
 
 Existing public panels are automatically upgraded to show the new button after their next interaction, without overwriting custom titles and introductions. The old five button identifiers remain stable and the new sixth button uses a persistent ID.
 
@@ -157,3 +157,19 @@ To publish a panel and add it to channel pins, a server manager runs `/doctorpan
 The bot needs Discord's **Pin Messages** permission (or Manage Messages on versions that require it). A failed pin operation does not delete the panel; its ephemeral confirmation explains the permission problem. Only members with Manage Server may publish or update panels.
 
 **Discord limitation:** Pinning saves a message in Pinned Messages, not in a fixed header above conversation. In active chat it will still scroll away. For permanently obvious navigation, consider a dedicated read-only #start-here or #weed-doctor channel with the pinned panel and a channel topic linking to it. Automatic sticky reposting is intentionally NOT enabled because it would generate spam and API load.
+
+## Name-catalog coverage and provenance (2026 refresh)
+
+The bot now combines historical Kushy 2017 entries with approximately
+19,751 additional strain/product names from the licensed CI-Strains-Pro 2026
+source (see ATTRIBUTIONS.md). It normalizes spacing and punctuation, uses
+published aliases when present, ranks nearest names before long product
+listings, and offers labeled approximate spelling suggestions when no
+direct match exists. Some newer market names can still be absent.
+
+Source comparison: Cannlytics offers a strains-data API, but using the
+live provider requires a Cannlytics API key and confirmation of data usage
+rights. OpenTHC publishes a common data model, not an open universal list.
+Leafly and other review sites have restrictive reuse terms and must not be
+silently scraped into our bot. No user-generated medical effects or product
+THC percentages are treated as clinical facts.
