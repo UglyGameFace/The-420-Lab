@@ -86,6 +86,13 @@ def find_matches(query: str, *, limit: int = 5) -> list[StrainMatch]:
         elif term in candidate:
             contains.append(entry)
     if begins or contains:
+        # A short name is normally a closer search hit than a long vendor SKU.
+        # Prefer beginning-of-name matches; display entries without inventing
+        # that a marketing strain name guarantees a distinct genetic cultivar.
+        begins.sort(key=lambda item: (abs(len(compact(item.name)) - len(term)),
+                                      item.name.casefold()))
+        contains.sort(key=lambda item: (abs(len(compact(item.name)) - len(term)),
+                                        item.name.casefold()))
         return (begins + contains)[:limit]
     if len(term) < 4:
         return []
