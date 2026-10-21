@@ -57,7 +57,7 @@ def panel_embed(title: str | None = None, intro: str | None = None,
     embed.add_field(name="🧬 Cannabinoids", value="THC, CBD, CBG, CBN, THCA: sourced chemical facts.", inline=False)
     embed.add_field(name="🌱 Find Strains", value="Tap **Find Strains**, or use **/straininfo** and enter a name such as Northern Lights.", inline=False)
     embed.add_field(name="🔬 Research Library", value="PubMed, clinical trials, FDA reports, and official guides.", inline=False)
-    embed.set_footer(text="Centered selection pop-ups • Private replies • Not a medical professional")
+    embed.set_footer(text="Answers are private • Centered selection pop-ups • Not a medical professional")
     return embed
 
 async def answer(interaction: discord.Interaction, bot: LabBot, kind: str, value: str) -> None:
