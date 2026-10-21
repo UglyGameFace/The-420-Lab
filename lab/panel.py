@@ -10,6 +10,7 @@ from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS
 from .strains import result_text as strain_result_text
 from .leafly import leafly_answer
+from .strain_profiles import database_embed, catalog_counts, strain_embed
 if TYPE_CHECKING:
     from .bot import LabBot
 log = logging.getLogger(__name__)
@@ -51,13 +52,18 @@ def panel_embed(title: str | None = None, intro: str | None = None,
     embed = discord.Embed(
         title="🌿 " + heading,
         description=f"**{opening}**\nChoose a button to explore benefits and risks, "
-                    "cannabinoids, research, and historical strain names.",
+                    "cannabinoids, research, and the strain database.",
         color=PANEL_THEMES.get(theme, PANEL_THEMES["forest"]))
     embed.add_field(name="🧠 Ask the Doctor", value="Enter your own question about effects or science.", inline=False)
     embed.add_field(name="📚 Explore Topics", value="Benefits, risks, anxiety, sleep, tolerance and more.", inline=False)
     embed.add_field(name="🧬 Cannabinoids", value="THC, CBD, CBG, CBN, THCA: sourced chemical facts.", inline=False)
     embed.add_field(name="🌱 Find Strains", value="Tap **Find Strains**, or use **/straininfo** and enter a name such as Northern Lights.", inline=False)
     embed.add_field(name="🔬 Research Library", value="PubMed, clinical trials, FDA reports, and official guides.", inline=False)
+    embed.add_field(
+        name="📊 Strain Database",
+        value=f"**{catalog_counts()['distinct']:,} distinct names** across three catalog sources. "
+              "Tap **Database Info** or use **/straindb** to see source dates, "
+              "detail providers, and update status.", inline=False)
     embed.set_footer(text="Answers are private • Centered selection pop-ups • Not a medical professional")
     return embed
 
@@ -174,9 +180,13 @@ class StrainQueryModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         if not await interaction.client.admit_interaction(interaction):
             return
+        name = str(self.search_term.value)
         await interaction.response.send_message(
-            leafly_answer(str(self.search_term.value)), ephemeral=True,
-            allowed_mentions=discord.AllowedMentions.none())
+            "Use /straindb to see catalog size and updates. "
+            "Details below are tied to cited sources, not universal medical effects.",
+            embed=strain_embed(name, interaction.guild_id,
+                               interaction.client.strain_profiles),
+            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 class PapersModal(discord.ui.Modal):
@@ -296,10 +306,11 @@ class LabPanelView(discord.ui.View):
                 for child in getattr(row, "children", ())
             }
             missing_strain = "the420lab:panel:v1:strain" not in controls
+            missing_stats = "the420lab:panel:v1:database" not in controls
             old_default = bool(
                 message.embeds and message.embeds[0].title == "🌿 THE 420 LAB | Cannabis Science Desk"
             )
-            if (missing_strain or old_default) and message.id not in self._refresh_pending:
+            if (missing_strain or missing_stats or old_default) and message.id not in self._refresh_pending:
                 self._refresh_pending.add(message.id)
                 # Do not delay Discord's interaction acknowledgement to edit the old post.
                 asyncio.create_task(self._refresh_panel(message, old_default))
@@ -343,6 +354,13 @@ class LabPanelView(discord.ui.View):
     async def find_strains(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(StrainQueryModal())
 
+    @discord.ui.button(label="Database Info", emoji="📊", style=discord.ButtonStyle.secondary,
+                       custom_id="the420lab:panel:v1:database", row=1)
+    async def database_info(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            embed=database_embed(), ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none())
+
     @discord.ui.button(label="Help & Safety", emoji="ℹ️", style=discord.ButtonStyle.secondary,
                        custom_id="the420lab:panel:v1:help", row=1)
     async def help(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -350,6 +368,9 @@ class LabPanelView(discord.ui.View):
         embed.description = (
             "**Ask:** Type any science question.\n**Topics:** Choose a preset research question.\n"
             "**Cannabinoids:** Explore PubChem chemistry.\n**Find Strains:** Tap 🌱 Find Strains or enter `/straininfo` and a strain name, such as Northern Lights.\n"            "**Research:** Studies, advanced design filters, trials, guides, and FDA reports.\n\n"
+            "**Database:** Tap 📊 Database Info or use `/straindb` for current "
+            "coverage and source dates. Use `/strainprofile` for credited descriptions, "
+            "licensed photos and optional server ratings.\n\n"
             "Your responses are private. If enabled, Gemini receives your question and source excerpts; "
             "do not enter private health details. A paper or trial listing isn't proof of benefit. "
             "For severe symptoms, contact emergency services. This is an educational bot, not a physician.")
