@@ -170,12 +170,14 @@ class GrowerHub:
 
     def interrupted(self, guild_id: int):
         """Only stale non-final states; ordinary ongoing requests are not shown."""
+        cutoff = (datetime.now(timezone.utc) - RECOVERY_AFTER).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
         with closing(self.profiles._connect()) as db:
-            rows = db.execute(
-                """SELECT id,status,operation_utc FROM grower_submissions
+            return db.execute(
+                """SELECT id,status FROM grower_submissions
                 WHERE guild=? AND status IN ('reviewing','removing')
-                ORDER BY id LIMIT 20""", (str(guild_id),)).fetchall()
-        return [(id, status) for id, status, operation in rows if self._stale(operation)]
+                AND (operation_utc='' OR operation_utc<?)
+                ORDER BY id LIMIT 20""", (str(guild_id), cutoff)).fetchall()
 
     def review_is_interrupted(self, guild_id: int, submission_id: int) -> bool:
         with closing(self.profiles._connect()) as db:
