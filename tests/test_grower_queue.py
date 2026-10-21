@@ -1,6 +1,8 @@
 """No-credential regression tests for durable staged photo queue."""
 import tempfile
+import sqlite3
 import unittest
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -46,6 +48,44 @@ class QueueStorageTests(unittest.TestCase):
             self.hub.start_staged_upload(5, 9999, "Grower",
                                          "Blue Dream", "flowering", "", 101)
         self.assertEqual(self.hub.my_uploads(5, 9999), [])
+
+    def test_30_minute_expiry_cleans_queue_but_preserves_member_receipt(self):
+        sid, key = self.hub.start_staged_upload(
+            5, 404, "Grower", "Blue Dream", "flowering", "", 101)
+        self.hub.stage_confirmed(5, sid)
+        self.assertEqual(self.hub.expire_queued(), 0)
+        old = (datetime.now(timezone.utc) - timedelta(minutes=31)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        with sqlite3.connect(self.path) as db:
+            db.execute("UPDATE grower_stage_queue SET created_utc=? WHERE submission=?",
+                       (old, sid))
+        restarted = GrowerHub(StrainProfileStore(self.path))
+        self.assertEqual(restarted.expire_queued(), 1)
+        self.assertIsNone(restarted.claim_stage())
+        self.assertEqual(restarted.item(5, sid)[8], "expired")
+        self.assertEqual(restarted.my_uploads(5, 404)[0][2], "expired")
+        self.assertEqual(restarted.cleanup_entries(), [("5", sid, key)])
+        restarted.stage_cleanup(5, sid)
+        self.assertIsNone(restarted.stage_info(5, sid))
+        row = restarted.lock(5, sid, purpose="remove", user_id=404)
+        self.assertEqual(row[8], "expired")
+        restarted.delete(5, sid, "removing")
+        self.assertIsNone(restarted.item(5, sid))
+
+    def test_processing_photo_does_not_expire_while_result_is_uncertain(self):
+        sid, key = self.hub.start_staged_upload(
+            5, 405, "Grower", "Blue Dream", "flowering", "", 101)
+        self.hub.stage_confirmed(5, sid)
+        old = (datetime.now(timezone.utc) - timedelta(minutes=31)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        with sqlite3.connect(self.path) as db:
+            db.execute("UPDATE grower_stage_queue SET created_utc=? WHERE submission=?",
+                       (old, sid))
+        job = self.hub.claim_stage()
+        self.assertEqual(job[2], key)
+        self.assertEqual(self.hub.expire_queued(), 0)
+        self.assertEqual(self.hub.item(5, sid)[8], "uploading")
+        self.assertEqual(self.hub.stage_info(5, sid)[1], "processing")
 
     def test_normal_submission_still_works(self):
         sid = self.hub.begin_upload(5, 777, "Grower", "Blue Dream",
