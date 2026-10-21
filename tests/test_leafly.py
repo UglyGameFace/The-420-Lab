@@ -79,7 +79,7 @@ class LeaflyLicensedCsvTests(unittest.TestCase):
             self.assertIsNotNone(record)
             self.assertEqual(record.rating, "4.5/5")
             message = licensed_data_summary("Blue Dream")
-            self.assertIn("Reported effects: Creative, Happy", message)
+            self.assertIn("Historically reported effects (not predictive): Creative, Happy", message)
             self.assertIn("not current live Leafly data", message)
             self.assertNotIn("Some text", message)
             self.assertNotIn("Unreliable text", licensed_data_summary("Super Boof"))
@@ -89,6 +89,25 @@ class LeaflyLicensedCsvTests(unittest.TestCase):
             record = local_profile("Super Boof")
             self.assertEqual(record.rating, "")
             self.assertEqual(record.effects, ("Focused", "Giggly"))
+
+    def test_real_4762_row_header_format_extracts_cautious_context(self):
+        fixture = Path(self.temp.name) / "leafly-legacy.csv"
+        fixture.write_text(
+            "name,img_url,type,thc_level,most_common_terpene,description,"
+            "relaxed,happy,euphoric,sleepy,creative\n"
+            "GG4,,Hybrid,20%,Caryophyllene,Marketing claim,"
+            "80%,50%,bad,0%,60%\n",
+            encoding="utf-8")
+        with patch.dict(os.environ, {"LEAFLY_LICENSED_CSV_PATH": str(fixture)}):
+            row = local_profile("GG4")
+            self.assertEqual(row.catalog_type, "Hybrid")
+            self.assertEqual(row.listed_terpene, "Caryophyllene")
+            self.assertEqual(row.effects, ("Relaxed", "Creative", "Happy"))
+            message = licensed_data_summary("GG4")
+            self.assertIn("unknown", message)
+            self.assertNotIn("Marketing claim", message)
+            self.assertNotIn("20%", message)
+            self.assertNotIn("80%", message)
 
     def test_missing_csv_fails_safely(self):
         with patch.dict(os.environ, {"LEAFLY_LICENSED_CSV_PATH": str(self.csv_file) + ".missing"}):
