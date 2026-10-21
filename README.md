@@ -200,3 +200,31 @@ Leafly strain API. Leafly's July 2026 terms restrict automated querying
 and mining. The Weed Doctor does not scrape or copy Leafly's proprietary
 reviews. Official reference: https://www.leafly.com/strains
 Terms: https://www.leafly.com/info/terms-of-use
+
+### Recovered original Leafly CSV: provenance and compatibility
+
+The exact missing CannaBot-compatible CSV was located at:
+https://github.com/iboc/cannabis/blob/main/leafly_strain_data.csv
+https://github.com/contenthousestudios/canna/blob/main/leafly_strain_data.csv
+
+Both publicly accessible files have the same Git blob SHA
+7a3a3a6136efc56f8ebb53b8d183e2c81b0cdf94.
+The 2.78 MB CSV parses to exactly 4,762 distinct strain-name records and
+64 columns (name, img_url, type, thc_level, most_common_terpene,
+description and individual reported-effect percentages). CannaBot's
+README advertises exactly 4,762, consistent with these mirrors.
+
+The mirrors contain NO documented grant to reproduce or distribute
+Leafly-owned descriptions, media or ratings. Public GitHub availability
+is not the same as permission for republishing the file. Under Leafly's
+July 2026 terms, automated extraction and unauthorized copying are
+restricted (https://www.leafly.com/info/terms-of-use). Therefore the
+CSV is NOT bundled, fetched during installation, or loaded automatically.
+
+The private, opt-in CSV adapter now understands the recovered CSV
+layout as well as generic CannaBot-style Rating/Effects/Flavor columns.
+For effect percentages it displays only top historical labels, not
+percentages: the source gives no robust denominators or current
+survey dates. It omits the legacy THC number, photo URLs and descriptions.
+Only configure LEAFLY_LICENSED_CSV_PATH with data that you are authorized
+to incorporate in a publicly accessible bot.
