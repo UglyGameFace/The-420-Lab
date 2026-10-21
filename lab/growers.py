@@ -48,9 +48,17 @@ def photo_as_jpeg(data: bytes) -> bytes:
                 raise ValueError("Only JPEG, PNG, and WebP photos are supported.")
             if source.width * source.height > MAX_PIXELS or min(source.size) < 64:
                 raise ValueError("Use a photo at least 64 px wide and no larger than 8 megapixels.")
-            corrected = ImageOps.exif_transpose(source)
-            corrected.thumbnail((2048, 2048))
-            picture = corrected.convert("RGB")
+            # JPEG decoders can reduce resolution before allocating the image
+            # buffer. On our 256 MiB host this avoids decoding all 8 MP where
+            # a smaller gallery photo is sufficient.
+            if source.format == "JPEG":
+                source.draft("RGB", (2048, 2048))
+            # Avoid a second full-size image copy for EXIF normalization.
+            # Pillow >=10.4 supports in-place EXIF transpose.
+            ImageOps.exif_transpose(source, in_place=True)
+            source.thumbnail((2048, 2048))
+            # RGB sources need no extra full-size RGB conversion buffer.
+            picture = source if source.mode == "RGB" else source.convert("RGB")
             output = BytesIO()
             picture.save(output, format="JPEG", quality=83, optimize=True)
             value = output.getvalue()
