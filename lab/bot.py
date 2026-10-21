@@ -17,6 +17,7 @@ from .guidance import GUIDES, guide_message
 from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
 from .leafly import leafly_reference, leafly_answer
+from .strain_profiles import StrainProfileStore, database_embed, strain_embed
 from .health import LabHealth
 from .quotas import QuotaGate, QuotaExceeded
 from .control import OwnerControlView, panel as owner_panel
@@ -34,6 +35,7 @@ class LabBot(commands.Bot):
         self._panel_access = OrderedDict()
         self.health = LabHealth()
         self.quota = QuotaGate()
+        self.strain_profiles = StrainProfileStore()
         logger.info("Quota ledger at launch: %s", self.quota.continuity_description())
         self._heartbeat_task = None
 
@@ -310,6 +312,135 @@ async def leafly(interaction: discord.Interaction, name: app_commands.Range[str,
     await interaction.response.send_message(
         clip_discord(leafly_answer(name)), ephemeral=True,
         allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="straindb", description="See how large and up-to-date the Weed Doctor strain database is")
+async def straindb(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        embed=database_embed(), ephemeral=True,
+        allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="strainprofile", description="View credited strain descriptions, images, sources and ratings")
+@app_commands.describe(name="Cannabis strain name, e.g. Northern Lights")
+@app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
+async def strainprofile(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
+    try:
+        embed = strain_embed(name, interaction.guild_id, bot.strain_profiles)
+    except Exception:
+        logger.exception("Strain profile lookup failed")
+        await interaction.response.send_message(
+            "Strain profile storage is unavailable. Try /straininfo for the offline catalog.",
+            ephemeral=True)
+        return
+    await interaction.response.send_message(
+        embed=embed, ephemeral=True,
+        allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="strainreviews", description="Manager: enable, disable or clear original server strain ratings")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(enabled="Allow members to rate strain names in this server",
+                       clear="Permanently erase the server's saved ratings")
+async def strainreviews(interaction: discord.Interaction, enabled: bool,
+                        clear: bool = False):
+    try:
+        if clear:
+            bot.strain_profiles.clear_reviews(interaction.guild_id)
+        bot.strain_profiles.set_reviews_enabled(interaction.guild_id, enabled)
+    except Exception:
+        logger.exception("Unable to update strain review settings")
+        await interaction.response.send_message(
+            "Review storage could not be updated.", ephemeral=True)
+        return
+    await interaction.response.send_message(
+        ("Community strain ratings are now **enabled**." if enabled else
+         "Community strain ratings are now **disabled**.")
+        + (" Previously submitted ratings were permanently cleared." if clear else "")
+        + " Only aggregate scores are shown. Reviews are personal opinions, not medical evidence.",
+        ephemeral=True)
+
+
+@bot.tree.command(name="strainrate", description="Rate a strain from 1 to 5 for this server only")
+@app_commands.guild_only()
+@app_commands.describe(name="Exact catalog strain name", stars="Score between 1 and 5")
+@app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
+async def strainrate(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60],
+                     stars: app_commands.Range[int, 1, 5]):
+    if not await bot.admit_interaction(interaction):
+        return
+    try:
+        bot.strain_profiles.rate(interaction.guild_id, interaction.user.id, name, stars)
+    except ValueError as exc:
+        await interaction.response.send_message(str(exc), ephemeral=True)
+        return
+    except Exception:
+        logger.exception("Server community strain rating failed")
+        await interaction.response.send_message(
+            "Ratings are currently unavailable.", ephemeral=True)
+        return
+    await interaction.response.send_message(
+        f"Your {stars}/5 score for **{name}** was saved privately. "
+        "You can change it by rating the same name again. "
+        "Community ratings are not treatment advice.",
+        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="doctorstrainset", description="Application-owner: provide a licensed strain description and image")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(
+    name="Exact catalog strain name",
+    description="Original or licensed short description (15–550 chars)",
+    source_url="Public HTTPS URL attributing the source and content rights",
+    rights="Legal basis for the description and optional image",
+    image_url="Optional public HTTPS image URL licensed for this bot")
+@app_commands.choices(rights=[
+    app_commands.Choice(name="My original content", value="original"),
+    app_commands.Choice(name="CC BY 4.0 with attribution", value="cc-by-4.0"),
+    app_commands.Choice(name="Separately licensed", value="licensed")])
+async def doctorstrainset(
+    interaction: discord.Interaction, name: app_commands.Range[str, 2, 60],
+    description: str, source_url: str, rights: str, image_url: str = ""):
+    if not await bot.is_owner(interaction.user):
+        await interaction.response.send_message(
+            "Only the Discord application owner can publish profiles to every server.",
+            ephemeral=True)
+        return
+    try:
+        bot.strain_profiles.save_curated(
+            name, description, source_url, image_url, rights)
+    except ValueError as exc:
+        await interaction.response.send_message(
+            str(exc), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        return
+    except Exception:
+        logger.exception("Curated strain profile save failed")
+        await interaction.response.send_message(
+            "Profile storage failed. No changes were confirmed.", ephemeral=True)
+        return
+    await interaction.response.send_message(
+        f"Credited profile for **{name}** saved. Use /strainprofile to preview it. "
+        "You are responsible for having reuse rights for descriptions and images.",
+        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="doctorstrainclear", description="Application-owner: remove a curated description and image")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(name="Exact catalog strain name to remove")
+async def doctorstrainclear(interaction: discord.Interaction,
+                            name: app_commands.Range[str, 2, 60]):
+    if not await bot.is_owner(interaction.user):
+        await interaction.response.send_message(
+            "Only the application owner can remove globally curated profiles.", ephemeral=True)
+        return
+    bot.strain_profiles.remove_curated(name)
+    await interaction.response.send_message(
+        "Curated profile removed. Catalog names and source links remain.",
+        ephemeral=True)
 
 
 @bot.tree.command(name="papers", description="Browse PubMed papers by indexed research design")
