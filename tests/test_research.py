@@ -420,7 +420,7 @@ class DiscordRegistryTests(unittest.TestCase):
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "straininfo", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth", "leafly"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "straininfo", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth", "leafly", "straindb", "strainprofile", "strainreviews", "strainrate", "doctorstrainset", "doctorstrainclear"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -490,22 +490,33 @@ class LegacyPanelUpgradeTests(unittest.IsolatedAsyncioTestCase):
         opts = post.edit.await_args.kwargs
         self.assertIn("view", opts)
         self.assertNotIn("embed", opts)  # Don't overwrite existing server branding.
-        self.assertEqual(len(opts["view"].children), 6)
+        self.assertEqual(len(opts["view"].children), 7)
 
 
 @unittest.skipUnless(importlib.util.find_spec("discord"), "discord.py is required")
 class PublicPanelTests(unittest.TestCase):
-    def test_panel_is_persistent_and_has_six_actions(self):
+    def test_panel_is_persistent_and_has_seven_actions(self):
         from lab.bot import bot
         from lab.panel import LabPanelView, panel_embed, TOPICS
         view = LabPanelView(bot)
         self.assertTrue(view.is_persistent())
-        self.assertEqual(len(view.children), 6)
+        self.assertEqual(len(view.children), 7)
         ids = [item.custom_id for item in view.children]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertTrue(all(x.startswith("the420lab:panel:v1:") for x in ids))
         self.assertIn("Answers are private", panel_embed().footer.text)
         self.assertIn("risks", TOPICS)
+
+    def test_public_panel_contains_database_info(self):
+        from lab.bot import bot
+        from lab.panel import LabPanelView, panel_embed
+        view = LabPanelView(bot)
+        buttons = {item.label: item for item in view.children}
+        self.assertEqual(
+            buttons["Database Info"].custom_id,
+            "the420lab:panel:v1:database")
+        self.assertIn("30,593", str(panel_embed().fields[-1].value))
+        self.assertIn("/straindb", str(panel_embed().fields[-1].value))
 
     def test_no_strain_game_command_collision(self):
         from lab.bot import bot
