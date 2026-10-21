@@ -280,6 +280,14 @@ def register_grower_commands(bot) -> None:
                             "Milestones: 1 photo · 5 photos · 20 photos. "
                             "These are community credits, not proof of cultivar identity.",
                 color=0x127B52)
+            if not public:
+                uploads = bot.growers.my_uploads(interaction.guild_id, interaction.user.id)
+                if uploads:
+                    embed.add_field(
+                        name="My recent upload IDs",
+                        value="\n".join(f"#{item_id} · {name} · {status}"
+                                        for item_id, name, status in uploads),
+                        inline=False)
             embed.set_footer(text="Server-only progress • Withdraw photos anytime with /growerwithdraw")
             await interaction.response.send_message(
                 embed=embed, ephemeral=not public, allowed_mentions=NO_MENTIONS)
@@ -294,6 +302,12 @@ def register_grower_commands(bot) -> None:
     async def growerjournal(interaction: discord.Interaction,
                             strain: app_commands.Range[str, 2, 60] | None = None,
                             public: bool = False):
+        if public and not (isinstance(interaction.channel, discord.TextChannel)
+                           and interaction.channel.is_nsfw()):
+            await interaction.response.send_message(
+                "Public grow journals can only be shared in age-restricted text channels.",
+                ephemeral=True)
+            return
         try:
             _, gallery, _ = _configured_channels(interaction, bot.growers)
             entries = bot.growers.journal(interaction.guild_id, interaction.user.id,
@@ -321,18 +335,19 @@ def register_grower_commands(bot) -> None:
     @app_commands.guild_only()
     @app_commands.describe(id="Your submission number (from your upload receipt)")
     async def growerwithdraw(interaction: discord.Interaction, id: int):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             await _remove_submission(interaction, bot, id, user_id=interaction.user.id)
         except ValueError as exc:
-            await interaction.response.send_message(str(exc), ephemeral=True)
+            await interaction.followup.send(str(exc), ephemeral=True)
             return
         except Exception:
             log.exception("Grower withdrawal failed")
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Withdrawal could not finish. Staff may need to restore channel access "
                 "before the photo can be removed.", ephemeral=True)
             return
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"Submission **#{id}** and its saved photo posts were removed.",
             ephemeral=True)
 
@@ -341,13 +356,14 @@ def register_grower_commands(bot) -> None:
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def growerremove(interaction: discord.Interaction, id: int):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             await _remove_submission(interaction, bot, id, user_id=None)
         except Exception:
             log.exception("Moderation removal failed")
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Removal failed. Check the submission number, bot permissions and channels.",
                 ephemeral=True)
             return
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"Grower submission **#{id}** removed.", ephemeral=True)
