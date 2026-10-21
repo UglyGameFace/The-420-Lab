@@ -140,6 +140,11 @@ Discord's application name and bot account username must also be changed by the 
 
 ## Strain lookup: member instructions
 
-Members have **two obvious routes**: type `/strains` and fill in the **name** argument (for example, Northern Lights), or press **🌱 Find Strains** directly on the persistent public panel and enter the name in the form. The original `/strain` command and the strain lookup inside Research Library remain available as backwards-compatible alternatives. Results are private and display up to five closest matches from the **2017** historical MIT-licensed index, not today's verified product chemistry or clinical effects.
+Members have **two obvious routes**: type `/straininfo` and fill in the **name** argument (for example, Northern Lights), or press **🌱 Find Strains** directly on the persistent public panel and enter the name in the form. Research Library → Strain Name Reference is an alternative. Idle Grow Op retains its own `/strain` game command, and The Weed Doctor intentionally does not register `/strain` or `/strains`. Results are private and display up to five closest matches from the **2017** historical MIT-licensed index, not today's verified product chemistry or clinical effects.
 
 Existing public panels are automatically upgraded to show the new button after their next interaction, without overwriting custom titles and introductions. The old five button identifiers remain stable and the new sixth button uses a persistent ID.
+
+
+### Avoiding a game command collision
+
+Idle Grow Op uses the `/strain` game command, so **The Weed Doctor only registers `/straininfo`** for informational lookup. The interactive **🌱 Find Strains** button remains on the public research panel. The Weed Doctor's older `/strain` and `/strains` aliases were retired; these do not affect the separate Idle Grow Op bot. Existing panel custom IDs remain stable.

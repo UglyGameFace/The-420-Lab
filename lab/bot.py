@@ -285,24 +285,17 @@ async def fdareports(interaction: discord.Interaction, medicine: str):
                                     allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="strain", description="Search an attributed historical cannabis strain-name reference")
-@app_commands.describe(name="Strain or cultivar name, not an effect prediction")
+@bot.tree.command(name="straininfo", description="Look up historical cannabis strain information (not game commands)")
+@app_commands.describe(name="Cannabis strain name, for example Northern Lights")
 @app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
-async def strain(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
+async def straininfo(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
+    """Separate science-only lookup from Idle Grow Op's /strain game command."""
     if not await bot.admit_interaction(interaction):
         return
     bot.health.record("strain")
     await interaction.response.send_message(
         strain_result_text(name), ephemeral=True,
         allowed_mentions=discord.AllowedMentions.none())
-
-
-@bot.tree.command(name="strains", description="Find cannabis strain names (try Northern Lights)")
-@app_commands.describe(name="Enter a strain name, e.g. Northern Lights")
-@app_commands.checks.cooldown(1, 10, key=lambda i: (i.guild_id, i.user.id))
-async def strains(interaction: discord.Interaction, name: app_commands.Range[str, 2, 60]):
-    """Clearer public alias for the historical /strain command."""
-    await strain.callback(interaction, name=name)
 
 
 @bot.tree.command(name="papers", description="Browse PubMed papers by indexed research design")

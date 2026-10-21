@@ -95,3 +95,8 @@ User requested rebranding from The 420 Lab to The Weed Doctor. Discord-visible t
 ## Strain discoverability fix
 
 User reported strain discovery and instructions were unclear. Added a prominent 🌱 Find Strains root button on the public panel (six total); a self-explanatory `/strains name` alias to the existing `/strain` handler; explicit example Northern Lights in modal, panel embed, help text and README. Legacy public panels upgrade their view after the next button interaction without overwriting server-custom titles. Kept old button identifiers, per-user quota admission and ephemeral answers intact. Validate GitHub Actions, Discloud and live Discord UI; actual live interaction not yet inspected.
+
+
+## Command name collision correction
+
+The owner reported Idle Grow Op already owns `/strain` for gameplay. To avoid clashing with their game bot, removed The Weed Doctor `/strain` and `/strains` commands and registered only `/straininfo name` for the historical strain reference. Updated onboarding, embed, help, tests and documentation. Preserved the public 🌱 Find Strains panel button and its stable custom ID `the420lab:panel:v1:strain`. Fixed an inadvertently un-awaited async test by moving it into an `IsolatedAsyncioTestCase`. Verify global Discord sync, CI and Discloud deployment; the original Idle Grow Op application is untouched.

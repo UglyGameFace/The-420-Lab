@@ -55,7 +55,7 @@ def panel_embed(title: str | None = None, intro: str | None = None,
     embed.add_field(name="🧠 Ask the Doctor", value="Enter your own question about effects or science.", inline=False)
     embed.add_field(name="📚 Explore Topics", value="Benefits, risks, anxiety, sleep, tolerance and more.", inline=False)
     embed.add_field(name="🧬 Cannabinoids", value="THC, CBD, CBG, CBN, THCA: sourced chemical facts.", inline=False)
-    embed.add_field(name="🌱 Find Strains", value="Tap **Find Strains**, or use **/strains** and enter a name such as Northern Lights.", inline=False)
+    embed.add_field(name="🌱 Find Strains", value="Tap **Find Strains**, or use **/straininfo** and enter a name such as Northern Lights.", inline=False)
     embed.add_field(name="🔬 Research Library", value="PubMed, clinical trials, FDA reports, and official guides.", inline=False)
     embed.set_footer(text="Answers are private • Evidence, not hype • Not a medical professional")
     return embed
@@ -351,7 +351,7 @@ class LabPanelView(discord.ui.View):
         embed = discord.Embed(title="The Weed Doctor • How to Use", color=discord.Color.from_rgb(18, 123, 82))
         embed.description = (
             "**Ask:** Type any science question.\n**Topics:** Choose a preset research question.\n"
-            "**Cannabinoids:** Explore PubChem chemistry.\n**Find Strains:** Tap 🌱 Find Strains or enter `/strains` and a strain name, such as Northern Lights.\n"            "**Research:** Studies, advanced design filters, trials, guides, and FDA reports.\n\n"
+            "**Cannabinoids:** Explore PubChem chemistry.\n**Find Strains:** Tap 🌱 Find Strains or enter `/straininfo` and a strain name, such as Northern Lights.\n"            "**Research:** Studies, advanced design filters, trials, guides, and FDA reports.\n\n"
             "Your responses are private. If enabled, Gemini receives your question and source excerpts; "
             "do not enter private health details. A paper or trial listing isn't proof of benefit. "
             "For severe symptoms, contact emergency services. This is an educational bot, not a physician.")

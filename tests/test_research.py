@@ -356,7 +356,7 @@ class DiscordRegistryTests(unittest.TestCase):
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "strain", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth", "strains"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "straininfo", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth"})
         self.assertFalse(bot.intents.message_content)
 
 
@@ -401,31 +401,7 @@ class CommandSyncScopeTests(unittest.IsolatedAsyncioTestCase):
                     await bot.sync_commands()
 
 @unittest.skipUnless(importlib.util.find_spec("discord"), "discord.py is required")
-class PublicPanelTests(unittest.TestCase):
-    def test_panel_is_persistent_and_has_six_actions(self):
-        from lab.bot import bot
-        from lab.panel import LabPanelView, panel_embed, TOPICS
-        view = LabPanelView(bot)
-        self.assertTrue(view.is_persistent())
-        self.assertEqual(len(view.children), 6)
-        ids = [item.custom_id for item in view.children]
-        self.assertEqual(len(ids), len(set(ids)))
-        self.assertTrue(all(x.startswith("the420lab:panel:v1:") for x in ids))
-        self.assertIn("Answers are private", panel_embed().footer.text)
-        self.assertIn("risks", TOPICS)
-
-    def test_public_panel_explains_strain_lookup(self):
-        from lab.bot import bot
-        from lab.panel import LabPanelView, StrainQueryModal, panel_embed
-        view = LabPanelView(bot)
-        actions = {child.label: child for child in view.children}
-        self.assertIn("Find Strains", actions)
-        self.assertEqual(actions["Find Strains"].custom_id, "the420lab:panel:v1:strain")
-        self.assertIn("/strains", panel_embed().fields[3].value)
-        modal = StrainQueryModal()
-        self.assertIn("strain", modal.title.lower())
-        self.assertIn("Northern Lights", modal.search_term.placeholder)
-
+class LegacyPanelUpgradeTests(unittest.IsolatedAsyncioTestCase):
     async def test_legacy_panel_upgrade_is_scheduled_without_blocking(self):
         from lab.bot import bot
         from lab.panel import LabPanelView
@@ -449,6 +425,40 @@ class PublicPanelTests(unittest.TestCase):
         self.assertIn("view", opts)
         self.assertNotIn("embed", opts)  # Don't overwrite existing server branding.
         self.assertEqual(len(opts["view"].children), 6)
+
+
+@unittest.skipUnless(importlib.util.find_spec("discord"), "discord.py is required")
+class PublicPanelTests(unittest.TestCase):
+    def test_panel_is_persistent_and_has_six_actions(self):
+        from lab.bot import bot
+        from lab.panel import LabPanelView, panel_embed, TOPICS
+        view = LabPanelView(bot)
+        self.assertTrue(view.is_persistent())
+        self.assertEqual(len(view.children), 6)
+        ids = [item.custom_id for item in view.children]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertTrue(all(x.startswith("the420lab:panel:v1:") for x in ids))
+        self.assertIn("Answers are private", panel_embed().footer.text)
+        self.assertIn("risks", TOPICS)
+
+    def test_no_strain_game_command_collision(self):
+        from lab.bot import bot
+        commands = {command.name for command in bot.tree.get_commands()}
+        self.assertIn("straininfo", commands)
+        self.assertNotIn("strain", commands)
+        self.assertNotIn("strains", commands)
+
+    def test_public_panel_explains_strain_lookup(self):
+        from lab.bot import bot
+        from lab.panel import LabPanelView, StrainQueryModal, panel_embed
+        view = LabPanelView(bot)
+        actions = {child.label: child for child in view.children}
+        self.assertIn("Find Strains", actions)
+        self.assertEqual(actions["Find Strains"].custom_id, "the420lab:panel:v1:strain")
+        self.assertIn("/straininfo", panel_embed().fields[3].value)
+        modal = StrainQueryModal()
+        self.assertIn("strain", modal.title.lower())
+        self.assertIn("Northern Lights", modal.search_term.placeholder)
 
     def test_library_exposes_official_guides(self):
         from lab.bot import bot
