@@ -484,6 +484,18 @@ Members cannot post directly into the gallery through this feature.
   own storage only for as long as their messages exist, subject to Discord's
   data handling and caches.
 
+**Restart safety:** If an approval or deletion was interrupted for more than
+five minutes, `/growerqueue` identifies the stalled submission. Managers use
+`/growerrecover id:` to finish deletions or find and adopt a previously
+published gallery post by its bot-authored submission marker. If no gallery
+post is found in the last 250 messages, **do not assume it was never sent**:
+search the original gallery manually, then run
+`/growerrecover id: confirmed_not_published:true` only after confirming that
+there is no published copy. This safely returns the submission to review.
+Existing SQLite records gain an operation timestamp with an in-place migration.
+The user can also retry a stalled withdrawal after five minutes, without
+requiring the manager to repost an image.
+
 **Moderation:** `/growerqueue` gives managers pending photo IDs and private
 review links. `/growerreview id: approve:true/false` publishes the sanitized
 copy or rejects/deletes the pending copy. `/growerremove id:` lets managers
