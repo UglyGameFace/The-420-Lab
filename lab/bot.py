@@ -18,7 +18,7 @@ from .fda import FDA_PRODUCTS, report_message
 from .strains import result_text as strain_result_text
 from .leafly import leafly_reference, leafly_answer
 from .strain_profiles import StrainProfileStore, database_embed, strain_embed
-from .cannalib_client import source_summary as cannalib_summary, CREDIT as CANNALIB_CREDIT
+from .rich_sources import sourced_summary
 from .health import LabHealth
 from .quotas import QuotaGate, QuotaExceeded
 from .control import OwnerControlView, panel as owner_panel
@@ -358,13 +358,13 @@ async def strainprofile(interaction: discord.Interaction, name: app_commands.Ran
             ephemeral=True)
         return
     try:
-        research = await cannalib_summary(bot.http_session, bot.quota, name)
+        research = await sourced_summary(bot.http_session, bot.quota, name)
     except Exception:
         logger.exception("CannaLib preview failed without exposing provider details")
         research = "Independent research is temporarily unavailable."
     embed.add_field(
         name="🧬 Independently sourced cultivar facts",
-        value=(research[:925] + "\n" + CANNALIB_CREDIT)[:1024],
+        value=research[:1024],
         inline=False)
     await interaction.followup.send(
         embed=embed, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
