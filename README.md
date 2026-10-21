@@ -397,3 +397,31 @@ The existing private /doctorstrainset supports photos you own or have
 permission to publish. Use FINDMYSEEDS_ENABLED=false to disable the
 new external provider if it becomes unavailable.
 Source: https://www.findmyseeds.com/find-my-seeds-public-api/
+
+## Credited real flower photos and optional Cannlytics
+
+**Available with no setup:** Weed Doctor strain cards now include an actual
+cannabis-bud photo taken by Thomas Elliott, from Wikimedia Commons (CC0).
+The picture is visibly marked as illustrative, NOT authenticated imagery of
+the particular strain requested. Original owner-curated cultivar photos
+still take priority over general illustrative images.
+
+**Optional Pexels:** Add PEXELS_API_KEY privately to enable actual
+photographs via Pexels' official API. Only cannabis-flower results with
+valid Pexels image and attribution URLs are accepted. The bot credits
+photographers, caches results for 6 hours, caches failures for 1 hour,
+uses the shared provider budget, and falls back to the CC0 photo.
+
+**Optional Cannlytics:** Add CANNLYTICS_API_KEY privately to enable
+read-only, exact-name requests to the documented
+https://cannlytics.com/api/data/strains/ endpoint. Results are bounded
+and cached for 1 hour, never treated as potency predictions for a
+particular product. No API call is made without an authorized key.
+
+References: https://commons.wikimedia.org/wiki/File:CannabisBud.jpg
+https://www.pexels.com/api/documentation/
+https://docs.cannlytics.com/api/data/strains/
+
+Live Pexels and Cannlytics calls have not been verified in the owner
+deployment because their respective secret API keys are not connected.
+Generic Commons photography is the built-in backup.
