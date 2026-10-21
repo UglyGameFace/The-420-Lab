@@ -197,6 +197,17 @@ class GrowerHub:
                 "DELETE FROM grower_submissions WHERE guild=? AND id=? AND status=?",
                 (str(guild_id), submission_id, status))
 
+    def journal(self, guild_id: int, user_id: int, name: str = ""):
+        """A contributor's approved progress timeline, never other members' posts."""
+        selected = verified_strain(name) if name else ""
+        with closing(self.profiles._connect()) as db:
+            return db.execute(
+                """SELECT id,strain,stage,caption,gallery_message,created_utc
+                FROM grower_submissions WHERE guild=? AND author_hash=?
+                AND status='approved' AND (?='' OR strain=?)
+                ORDER BY created_utc DESC,id DESC LIMIT 12""",
+                (str(guild_id), self._identity(guild_id, user_id), selected, selected)).fetchall()
+
     def stats(self, guild_id: int, user_id: int):
         with closing(self.profiles._connect()) as db:
             approved, pending, varieties = db.execute(
