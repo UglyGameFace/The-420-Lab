@@ -29,10 +29,10 @@ class PopupStructureTests(unittest.TestCase):
             self.assertIn(value, choices)
         self.assertLessEqual(len(choices), 25)
 
-    def test_all_six_public_panel_buttons_remain_persistent(self):
+    def test_all_seven_public_panel_buttons_remain_persistent(self):
         view = LabPanelView(bot)
         self.assertTrue(view.is_persistent())
-        self.assertEqual(len(view.children), 6)
+        self.assertEqual(len(view.children), 7)
         self.assertTrue(all(item.custom_id.startswith("the420lab:panel:v1:")
                             for item in view.children))
 
