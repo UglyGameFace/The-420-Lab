@@ -42,6 +42,8 @@ def library_options():
         discord.SelectOption(label="PubMed: Research Papers", value="papers:all"),
         discord.SelectOption(label="Registered Clinical Trials", value="trials"),
         discord.SelectOption(label="Historical Strain Names", value="strain"),
+        discord.SelectOption(label="Database Size & Source Dates", value="database",
+                             description="Live catalog count and independent data sources"),
         discord.SelectOption(label="Leafly Strain Profiles", value="leafly",
                              description="Verified pages or targeted search"),
         discord.SelectOption(label="Systematic Reviews", value="papers:systematic"),
@@ -73,6 +75,12 @@ class LibraryPicker(discord.ui.Modal):
     async def on_submit(self, interaction):
         from .panel import answer
         choice = self.choice.values[0]
+        if choice == "database":
+            from .strain_profiles import database_embed
+            await interaction.response.send_message(
+                embed=database_embed(), ephemeral=True,
+                allowed_mentions=discord.AllowedMentions.none())
+            return
         if choice.startswith("guide:"):
             await interaction.response.send_message(
                 guide_message(choice.split(":", 1)[1]),
