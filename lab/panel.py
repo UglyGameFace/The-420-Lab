@@ -64,6 +64,11 @@ def panel_embed(title: str | None = None, intro: str | None = None,
         value=f"**{catalog_counts()['distinct']:,} distinct names** across three catalog sources. "
               "Tap **Database Info** or use **/straindb** to see source dates, "
               "detail providers, and update status.", inline=False)
+    embed.add_field(name="📷 Grower Showcase (server opt-in)",
+                    value="Submit original grow photos for review with **/growersubmit**. "
+                          "Build a **/growerjournal**, earn community milestones, and "
+                          "withdraw uploads any time. Managers start with **/growerconfig**.",
+                    inline=False)
     embed.set_footer(text="Answers are private • Centered selection pop-ups • Not a medical professional")
     return embed
 
@@ -379,6 +384,10 @@ class LabPanelView(discord.ui.View):
             "**Database:** Tap 📊 Database Info or use `/straindb` for current "
             "coverage and source dates. Use `/strainprofile` for credited descriptions, "
             "licensed photos and optional server ratings.\n\n"
+            "**Grower Showcase:** Managers can enable a private-reviewed photo gallery "
+            "with /growerconfig. Members can upload original grow photos with "
+            "/growersubmit, see /growerprofile milestones, share /growerjournal and "
+            "withdraw images with /growerwithdraw.\n\n"
             "Your responses are private. If enabled, Gemini receives your question and source excerpts; "
             "do not enter private health details. A paper or trial listing isn't proof of benefit. "
             "For severe symptoms, contact emergency services. This is an educational bot, not a physician.")
