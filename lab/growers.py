@@ -248,9 +248,9 @@ class GrowerHub:
 
     def lock(self, guild_id: int, submission_id: int, *,
              purpose: str, user_id: int | None = None):
-        if purpose not in ("review", "remove"):
+        if purpose not in ("review", "remove", "reject"):
             raise ValueError("Unsupported submission action")
-        allowed = ("pending",) if purpose == "review" else ("pending", "approved")
+        allowed = ("pending",) if purpose in ("review", "reject") else ("pending", "approved")
         status = "reviewing" if purpose == "review" else "removing"
         with closing(self.profiles._connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
