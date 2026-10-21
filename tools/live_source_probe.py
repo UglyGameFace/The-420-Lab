@@ -8,6 +8,13 @@ import asyncio
 import sys
 import aiohttp
 from lab.sources import ScienceSources
+from lab.findmyseeds_client import source_summary as findmyseeds_summary
+from lab.flower_freedom_client import source_summary as flower_summary
+
+class NoneQuota:
+    def take_provider(self):
+        return None
+
 
 async def probe():
     timeout = aiohttp.ClientTimeout(total=18)
@@ -22,6 +29,8 @@ async def probe():
             ("PubChem", lambda: client.compound("CBD")),
             ("ClinicalTrials.gov", lambda: client.trials("sleep")),
             ("openFDA", lambda: client.fda_reports("epidiolex")),
+            ("Find My Seeds", lambda: findmyseeds_summary(session, NoneQuota(), "Blue Dream")),
+            ("Flower & Freedom", lambda: flower_summary(session, NoneQuota(), "Blue Dream")),
         )
         for name, action in checks:
             try:
@@ -30,6 +39,8 @@ async def probe():
                     raise ValueError("Empty provider response")
                 if name == "PubMed" and not result:
                     raise ValueError("No papers returned")
+                if name in ("Find My Seeds", "Flower & Freedom") and not result.startswith("**"):
+                    raise ValueError("No exact public strain profile returned")
                 print(f"PASS {name}: response parsed successfully")
             except Exception as exc:
                 print(f"FAIL {name}: {type(exc).__name__}: {exc}", file=sys.stderr)
