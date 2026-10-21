@@ -325,10 +325,20 @@ async def leafly(interaction: discord.Interaction, name: app_commands.Range[str,
             allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="straindb", description="See how large and up-to-date the Weed Doctor strain database is")
-async def straindb(interaction: discord.Interaction):
+@bot.tree.command(name="straindb", description="See the current Weed Doctor strain index size and source ages")
+@app_commands.describe(public="Publish the status card for everyone (Manage Server required)")
+@app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
+async def straindb(interaction: discord.Interaction, public: bool = False):
+    if public and not (
+        interaction.guild_id is not None and
+        interaction.permissions.manage_guild
+    ):
+        await interaction.response.send_message(
+            "Only members with Manage Server can publish the database status.",
+            ephemeral=True)
+        return
     await interaction.response.send_message(
-        embed=database_embed(), ephemeral=True,
+        embed=database_embed(), ephemeral=not public,
         allowed_mentions=discord.AllowedMentions.none())
 
 
