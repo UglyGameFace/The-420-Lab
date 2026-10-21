@@ -339,3 +339,37 @@ persistent disk is not configured; deployment status does not prove retention.
 ## Profile source fallback and real database counts
 
 Use /straindb or the public Database Info button for the exact offline strain-name count, source releases and freshness warnings. Server managers can publish this status using /straindb public:true. Use /strainprofile for enriched, credited cultivar context. The bot now tries CannaLib, then the publicly documented StrainAPI v1 API on an exact-match basis. See https://www.strainapi.com/api-terms/ for attribution and developer-use permission. Live provider results are not merged into the offline catalog count, and third-party images are not embedded without licensing. Real cannabinoid and terpene test values must be linked to a specific laboratory batch; the Cannlytics public dataset is linked as an independent batch-specific research source.
+
+## Sources, rights, statistics and lab results (public Discord UX)
+
+Use /straindb to view the actual offline strain-name total and source dates.
+Managers may set public:true to publish that card in a server channel.
+The persistent public panel includes a Database Info button and visible
+catalog count. Research Library now offers Data Sources, Photos & Lab
+Results. The same comparison is available using /strainsources; managers
+may set public:true to publish the source guide for everyone.
+
+Connected on-demand: CannaLib attributed strain claims (with shared rate
+budgets and no long-term response cache), followed by documented StrainAPI
+exact-name records if CannaLib cannot confirm a match. These supplement
+/strainprofile, but are not counted as local stored strains. Read and
+obey each provider's API licence and usage limits before commercial scaling.
+
+Independent external dataset: Cannlytics cannabis_results, a CC BY 4.0
+collection of laboratory results and COAs from multiple states, is linked
+as an external batch-specific research source. Do not treat measurements
+from one sample as the universal potency for all products with that name.
+An authenticated Cannlytics API account is needed to use its managed API;
+the bot does not claim a free universal query endpoint.
+
+Pictures: Wikimedia Commons has individually licensed images, not
+guaranteed photos of a specific cultivar. The app owner can contribute
+original or independently licensed descriptions/images using
+/doctorstrainset with explicit source and rights. Server managers can
+opt into first-party, per-server original ratings using /strainreviews.
+These scores are NOT Leafly ratings. The full Leafly review library,
+copyrighted descriptions and images are NOT reproduced or claimed live.
+
+Dataset snapshots: Kushy 2017-11-14, CI-Strains-Pro 2026, undated
+historical Leafly-name supplement. Provider lookup freshness does not
+mean these packaged files automatically update on a schedule.
