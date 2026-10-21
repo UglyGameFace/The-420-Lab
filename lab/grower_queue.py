@@ -80,6 +80,9 @@ async def run_queue(bot):
         await bot.wait_until_ready()
         while not bot.is_closed():
             try:
+                expired = bot.growers.expire_queued()
+                if expired:
+                    log.warning("Expired %d waiting grower image(s) after 30 minutes", expired)
                 for guild, sid, key in bot.growers.cleanup_entries():
                     try:
                         await bot.grower_intake.delete(key)
