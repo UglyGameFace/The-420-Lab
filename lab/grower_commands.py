@@ -287,6 +287,36 @@ def register_grower_commands(bot) -> None:
             log.exception("Grower profile failed")
             await interaction.response.send_message("Grower profiles are unavailable.", ephemeral=True)
 
+    @bot.tree.command(name="growerjournal", description="See your approved photo timeline and grow stages")
+    @app_commands.guild_only()
+    @app_commands.describe(strain="Optional exact strain name to filter your journal",
+                           public="Publish your own grow timeline in this channel")
+    async def growerjournal(interaction: discord.Interaction,
+                            strain: app_commands.Range[str, 2, 60] | None = None,
+                            public: bool = False):
+        try:
+            _, gallery, _ = _configured_channels(interaction, bot.growers)
+            entries = bot.growers.journal(interaction.guild_id, interaction.user.id,
+                                         strain or "")
+            rows = [f"**{stage.title()}** · {name} · {date[:10]} "
+                    f"· [Photo](https://discord.com/channels/{interaction.guild_id}/"
+                    f"{gallery.id}/{message_id})"
+                    + (f" · {caption}" if caption else "")
+                    for _, name, stage, caption, message_id, date in entries]
+            embed = discord.Embed(
+                title="📷 My Grower Journal",
+                description=("\n".join(rows) if rows else
+                             "No approved photos yet. Use /growersubmit when enabled.")[:3900],
+                color=0x127B52)
+            embed.set_footer(text="Most recent 12 approved photos • Member-reported strain/stage")
+            await interaction.response.send_message(
+                embed=embed, ephemeral=not public, allowed_mentions=NO_MENTIONS)
+        except ValueError as exc:
+            await interaction.response.send_message(str(exc), ephemeral=True)
+        except Exception:
+            log.exception("Grower journal failed")
+            await interaction.response.send_message("The grower journal is unavailable.", ephemeral=True)
+
     @bot.tree.command(name="growerwithdraw", description="Withdraw one of your grow photos and erase its entry")
     @app_commands.guild_only()
     @app_commands.describe(id="Your submission number (from your upload receipt)")
