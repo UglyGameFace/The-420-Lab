@@ -244,7 +244,7 @@ def source_directory_embed():
     embed.add_field(
         name="🧪 Cannlytics | Real lab certificates",
         value=(
-            "[Cannabis Results](https://github.com/cannlytics/cannabis_results) "
+            "[Cannlytics Cannabis Results](https://github.com/cannlytics/cannabis_results) "
             "• Separate public dataset (CC BY 4.0, subject to third-party rights), "
             "reporting many sample-level COAs from multiple states. "
             "Useful for actual batch cannabinoid/terpene measurements and testing dates. "
