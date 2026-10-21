@@ -18,7 +18,7 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 COMMONS_PAGE = "https://commons.wikimedia.org/wiki/File:CannabisBud.jpg"
-COMMONS_IMAGE = "https://commons.wikimedia.org/wiki/Special:FilePath/CannabisBud.jpg?width=960"
+COMMONS_IMAGE = "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9f/CannabisBud.jpg/960px-CannabisBud.jpg"
 
 
 @dataclass(frozen=True)
