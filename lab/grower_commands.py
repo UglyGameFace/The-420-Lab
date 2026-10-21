@@ -13,6 +13,9 @@ from .growers import MAX_UPLOAD_BYTES, STAGES, clean_caption, photo_as_jpeg, ver
 
 log = logging.getLogger(__name__)
 NO_MENTIONS = discord.AllowedMentions.none()
+# If another image is still uploading, reject after a short wait without
+# buffering any attachment. User can safely retry; no record was reserved.
+GROWER_IMAGE_QUEUE_WAIT = 10
 
 
 def _configured_channels(interaction: discord.Interaction, hub):
@@ -250,7 +253,16 @@ def register_grower_commands(bot) -> None:
         if not await bot.admit_interaction(interaction):
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
+        slot_taken = False
         try:
+            try:
+                await asyncio.wait_for(bot.grower_image_slots.acquire(),
+                                       timeout=GROWER_IMAGE_QUEUE_WAIT)
+                slot_taken = True
+            except asyncio.TimeoutError as exc:
+                raise ValueError(
+                    "The photo processor is busy. Try again shortly; "
+                    "no image was accepted or saved.") from exc
             data = await photo.read()
             normalized = await asyncio.to_thread(photo_as_jpeg, data)
             entry_id = bot.growers.begin_upload(
@@ -279,6 +291,9 @@ def register_grower_commands(bot) -> None:
             await interaction.followup.send(notice, ephemeral=True,
                                             allowed_mentions=NO_MENTIONS)
             return
+        finally:
+            if slot_taken:
+                bot.grower_image_slots.release()
         await interaction.followup.send(
             f"Your grow photo **#{entry_id}** is awaiting staff review. "
             "Your contributor name will appear only if approved. "

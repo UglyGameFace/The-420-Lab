@@ -37,6 +37,9 @@ class LabBot(commands.Bot):
         self.science = None
         self.assistant = None
         self.limiter = asyncio.Semaphore(3)
+        # Hold one complete image upload (read, decode, Discord send) at a
+        # time so concurrent 8 MiB attachments cannot exhaust 256 MiB RAM.
+        self.grower_image_slots = asyncio.Semaphore(1)
         self._panel_access = OrderedDict()
         self.health = LabHealth()
         self.quota = QuotaGate()

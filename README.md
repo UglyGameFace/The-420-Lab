@@ -496,7 +496,14 @@ the existing database and does not store Discord user IDs, tokens or photos.
   notes and explicit permission to show the image **in this server only**.
   Photo metadata, including EXIF/GPS, is stripped by re-encoding before it
   reaches the private review channel; file size, pixel count and supported
-  formats are bounded. The photo itself might still show private information.
+  formats are bounded. Image processing preserves EXIF orientation, downsamples
+  JPEG input before large allocations when supported, and avoids unnecessary
+  decoded-image copies. The photo itself might still show private information.
+  To reduce peak memory on the current 256 MiB Discloud configuration, **only
+  one entire grow-photo upload can run at a time**, including the Discord
+  send. Other contributors receive a brief busy/retry notice after 10 seconds,
+  without creating a pending record or buffering their image. Actual Discloud
+  RSS under heavy concurrent use is not yet measured.
 - `/growerprofile` shows approved photos, pending submissions, documented
   strains and milestones at 1, 5 and 20 accepted photos. Progress is private
   by default, with `public:true` for voluntary sharing.
@@ -544,6 +551,14 @@ member ID. The app does not prove plant genetics or the photographer's
 ownership. Photos are **not automatically imported** into global
 `/strainprofile` records or offered for reuse outside that server. The
 manager should moderate labels, permissions, imagery, and local law.
+
+**Hosting and memory:** `discloud.config` currently specifies `RAM=256`.
+The serialized upload path reduces image-processing peak usage, but cannot
+prove a full Discord bot with other extensions fits that memory ceiling during
+live traffic. Verify Discloud process RSS during a test upload of a permitted
+large JPEG and PNG before opening the gallery broadly. If memory pressure
+persists, increase the RAM allocation based on observed usage and plan
+limits; do not bypass the upload queue or the storage-continuity gate.
 
 **Storage limitation:** Gallery and review images live in Discord channel
 posts; submission states and contributor stats share the existing
