@@ -212,6 +212,68 @@ def database_embed():
     return embed
 
 
+
+def source_directory_embed():
+    """Public guide to what each provider actually supplies."""
+    import discord
+    embed = discord.Embed(
+        title="🔬 The Weed Doctor | Sources & Content Rights",
+        description=(
+            "Different sources answer different questions. "
+            "**30,582** local search names are not 30,582 lab-tested profiles, "
+            "photos, or current review pages."
+        ),
+        color=0x127B52)
+    embed.add_field(
+        name="🧬 CannaLib | Source-attributed cultivar facts",
+        value=(
+            "[CannaLib API](https://cannalib.org/api/) • Connected on demand, "
+            "with API safety limits. Breeder, catalog type, reported terpenes "
+            "and sourced chemical ranges when available. Free access requires "
+            "attribution; no bulk syncing. **Not a Leafly review feed.**"
+        ), inline=False)
+    embed.add_field(
+        name="🌱 StrainAPI | Additional descriptions and claims",
+        value=(
+            "[StrainAPI documentation](https://www.strainapi.com/docs/) • "
+            "Connected as an on-demand fallback, with an exact-name check. "
+            "Displays short attributed breeder, lineage, terpene, aroma and "
+            "flavor fields. Full descriptions and images are **not** copied "
+            "into our database without appropriate reuse rights."
+        ), inline=False)
+    embed.add_field(
+        name="🧪 Cannlytics | Real lab certificates",
+        value=(
+            "[Cannabis Results](https://github.com/cannlytics/cannabis_results) "
+            "• Separate public dataset (CC BY 4.0, subject to third-party rights), "
+            "reporting many sample-level COAs from multiple states. "
+            "Useful for actual batch cannabinoid/terpene measurements and testing dates. "
+            "**Not yet linked into each strain profile**, and never a universal potency claim."
+        ), inline=False)
+    embed.add_field(
+        name="📸 Pictures & reviewed descriptions",
+        value=(
+            "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "
+            "may provide reusable images, but each photo has its **own** license. "
+            "[Leafly](https://www.leafly.com/strains) has individual community "
+            "profiles; proprietary media/reviews aren't imported. The app owner "
+            "can add a credited description and licensed picture using "
+            "**/doctorstrainset**. No fake stock photo or review counts."
+        ), inline=False)
+    embed.add_field(
+        name="⭐ Community ratings & update dates",
+        value=(
+            "Our own optional per-server ratings come from **/strainrate**, "
+            "enabled by **/strainreviews**. They are **not** Leafly ratings. "
+            "Use **/straindb** for exact local-name counts and source dates: "
+            "Kushy 2017, CI-Strains-Pro 2026 and an undated historical mirror. "
+            "External provider updates do not automatically refresh those local files."
+        ), inline=False)
+    embed.set_footer(
+        text="Community opinions ≠ medical evidence • Specific batch COAs ≠ strain-wide promises")
+    return embed
+
+
 def strain_embed(name: str, guild_id: int | None, store: StrainProfileStore):
     import discord
     from .leafly import profile_for, leafly_search_url
