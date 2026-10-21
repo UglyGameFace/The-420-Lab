@@ -420,7 +420,7 @@ class DiscordRegistryTests(unittest.TestCase):
             self.skipTest("discord.py not installed in this local environment")
         from lab.bot import bot
         commands = {command.name for command in bot.tree.get_commands()}
-        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "straininfo", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth", "leafly", "straindb", "strainprofile", "strainreviews", "strainrate", "doctorstrainset", "doctorstrainclear", "strainsources"})
+        self.assertEqual(commands, {"askthc", "compound", "trials", "labpanel", "scienceguide", "fdareports", "straininfo", "labpanelupdate", "labhealth", "papers", "labcontrol", "doctorpanel", "doctorpanelupdate", "doctorcontrol", "doctorhealth", "leafly", "straindb", "strainprofile", "strainreviews", "strainrate", "doctorstrainset", "doctorstrainclear", "strainsources", "growerconfig", "growersubmit", "growerqueue", "growerreview", "growerprofile", "growerjournal", "growerwithdraw", "growerremove"})
         self.assertFalse(bot.intents.message_content)
 
 
