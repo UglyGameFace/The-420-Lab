@@ -203,7 +203,7 @@ def database_embed():
                "**Alternative profiles:** [StrainAPI](https://www.strainapi.com/docs/) " 
                "(on-demand breeder, lineage and terpene fields, separate from name index).\n"
                "**Community descriptions and photos:** Leafly original pages; "
-               "only permission-cleared content is shown inside Discord.\n"
+               "read photos and community opinions on the original profile pages.\n"
                "**Lab reports:** [Cannlytics public results](" + CANNLYTICS_RESULTS
                + ") (sample-specific, not strain-wide potency).\n"
                "**Photos:** [Wikimedia Commons](" + COMMONS_SEARCH
@@ -219,7 +219,7 @@ def source_directory_embed():
     """Public guide to what each provider actually supplies."""
     import discord
     embed = discord.Embed(
-        title="🔬 The Weed Doctor | Sources & Content Rights",
+        title="🔬 The Weed Doctor | Strain Data Sources",
         description=(
             "Different sources answer different questions. "
             f"**{catalog_counts()['distinct']:,}** local search names are not "
@@ -262,7 +262,7 @@ def source_directory_embed():
             "Connected as an on-demand fallback, with an exact-name check. "
             "Displays short attributed breeder, lineage, terpene, aroma and "
             "flavor fields. Full descriptions and images are **not** copied "
-            "into our database without appropriate reuse rights."
+            "into our database automatically."
         ), inline=False)
     embed.add_field(
         name="🧪 Cannlytics | Real lab certificates",
@@ -278,13 +278,13 @@ def source_directory_embed():
         value=(
             "[Find My Seeds API](https://www.findmyseeds.com/find-my-seeds-public-api/) "
             "provides community review counts, profile photos and descriptions "
-            "on its public profiles; image re-use rights and API stability "
+             "on its public profiles; source image links and availability "
             "must be confirmed before embedding third-party media. "
             "[Wikimedia Commons](https://commons.wikimedia.org/wiki/Special:MediaSearch) "
-            "may provide reusable images, but each photo has its **own** license. "
+            "offers original image sources with individual credits. "
             "[Leafly](https://www.leafly.com/strains) has individual community "
             "profiles; proprietary media/reviews aren't imported. The app owner "
-            "can add a credited description and licensed picture using "
+            "can add an original or credited description and picture using "
             "**/doctorstrainset**. No fake stock photo or review counts."
         ), inline=False)
     embed.add_field(
@@ -326,14 +326,14 @@ def strain_embed(name: str, guild_id: int | None, store: StrainProfileStore):
         description, url, image_url, rights, updated = curator
         embed.add_field(name="Credited description", value=description, inline=False)
         embed.add_field(name="Description provenance",
-                        value=f"[Original source]({url}) • Rights: {rights} • saved {updated}",
+                        value=f"[Original source]({url}) • saved {updated}",
                         inline=False)
         if image_url:
             embed.set_image(url=image_url)
     else:
         embed.add_field(name="Description & photo", value=(
-            "No reuse-authorized description or image has been provided for this name. "
-            "See the original reference or an independently licensed source."), inline=False)
+            "No curated summary or picture has been added for this strain yet. "
+            "Open its source profile above for more details and photos."), inline=False)
     profile = profile_for(display)
     if profile:
         embed.add_field(name="Leafly community profile",

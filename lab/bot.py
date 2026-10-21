@@ -326,7 +326,7 @@ async def leafly(interaction: discord.Interaction, name: app_commands.Range[str,
             allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="strainsources", description="View reliable strain data sources, photo rights and lab-test limitations")
+@bot.tree.command(name="strainsources", description="Explore sources for cultivar details, photos and lab results")
 @app_commands.describe(public="Publish source guide for everyone (Manage Server required)")
 @app_commands.checks.cooldown(1, 20, key=lambda i: (i.guild_id, i.user.id))
 async def strainsources(interaction: discord.Interaction, public: bool = False):

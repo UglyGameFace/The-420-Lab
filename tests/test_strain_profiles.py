@@ -92,7 +92,7 @@ class StrainProfileTests(unittest.TestCase):
     def test_missing_license_keeps_external_image_and_description_offline(self):
         embed = strain_embed("Blue Dream", 999, self.store)
         self.assertIsNone(embed.image.url)
-        self.assertIn("No reuse-authorized", "\n".join(f.value for f in embed.fields))
+        self.assertIn("No curated summary", "\n".join(f.value for f in embed.fields))
 
     def test_owner_can_add_and_remove_credited_description_and_photo(self):
         self.store.save_curated(
