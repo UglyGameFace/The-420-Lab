@@ -80,6 +80,8 @@ class GrowerStoreTests(unittest.TestCase):
     def test_review_approval_and_contributor_milestones(self):
         item_id = self.submit()
         self.assertEqual(self.hub.stats(self.guild, 123)[:3], (0, 1, 0))
+        self.assertEqual(self.hub.my_uploads(self.guild, 123)[0][0], item_id)
+        self.assertEqual(self.hub.my_uploads(self.guild, 999), [])
         self.assertEqual(self.hub.pending(self.guild)[0][0], item_id)
         locked = self.hub.lock(self.guild, item_id, purpose="review")
         self.assertEqual(locked[8], "pending")
@@ -109,6 +111,7 @@ class GrowerStoreTests(unittest.TestCase):
         reloaded.delete(self.guild, item_id, "removing")
         self.assertIsNone(self.hub.item(self.guild, item_id))
         self.assertEqual(self.hub.stats(self.guild, 123)[0], 0)
+        self.assertEqual(self.hub.my_uploads(self.guild, 123), [])
 
     def test_limits_and_validation(self):
         for offset in range(3):
