@@ -149,10 +149,23 @@ def result_text(query: str) -> str:
         for entry in matches:
             kind = _safe(entry.kind, 28)
             breeder = _safe(entry.breeder, 50)
-            if breeder and breeder.lower() not in ("unknown breeder", "none", "null"):
-                kind += " • listed breeder: " + breeder
-            lines.append("• **" + _safe(entry.name) + "** — " + kind)
-            lines.append("  Source: " + ", ".join(entry.sources))
+            lines.append("• **" + _safe(entry.name) + "**")
+            if kind and kind.casefold() not in ("unknown", "catalog listing", "none"):
+                lines.append(
+                    "  Archived " +
+                    ("Kushy 2017" if "Kushy 2017" in entry.sources else "catalog") +
+                    " type label: " + kind + " (not verified genetics)"
+                )
+            if breeder and breeder.casefold() not in ("unknown breeder", "none", "null"):
+                lines.append(
+                    "  Commercial breeder listing: " + breeder +
+                    " (not necessarily the original breeder)"
+                )
+            lines.append("  Name sources: " + ", ".join(entry.sources))
+        if (len(matches) == 1 and not matches[0].approximate and
+                compact(matches[0].name) == compact(query)):
+            from .cultivar_facts import reference_lines
+            lines.extend(reference_lines(matches[0].name))
     lines.extend([
         "",
         "**Limitations:** Names, breeders, and indica/sativa labels do not reliably predict "
