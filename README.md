@@ -456,36 +456,36 @@ photos**, keep an **approved grow-stage journal**, and earn **server-local
 contribution milestones**. It does not provide cultivation instructions,
 medical predictions, cannabis sales, seeds, or purchasing services.
 
-**Manager setup:** Run \`/growerconfig\` to choose two separate age-restricted
+**Manager setup:** Run `/growerconfig` to choose two separate age-restricted
 text channels: a *private staff-review* channel not viewable by @everyone and
 a *gallery* channel. The bot needs View Channel, Send Messages, Attach Files,
 Embed Links and Read Message History in both. Server managers can pause new
-uploads by running \`/growerconfig\` again with \`enabled:false\` and the same
+uploads by running `/growerconfig` again with `enabled:false` and the same
 channels. Existing approved photos and owners' withdrawal rights remain.
 Members cannot post directly into the gallery through this feature.
 
 **Contributor workflow:**
-- \`/growersubmit\` accepts an original JPEG, PNG or WebP photo (8 MiB maximum),
+- `/growersubmit` accepts an original JPEG, PNG or WebP photo (8 MiB maximum),
   an **exact catalog strain name**, a reported growth stage, optional progress
   notes and explicit permission to show the image **in this server only**.
   Photo metadata, including EXIF/GPS, is stripped by re-encoding before it
   reaches the private review channel; file size, pixel count and supported
   formats are bounded. The photo itself might still show private information.
-- \`/growerprofile\` shows approved photos, pending submissions, documented
+- `/growerprofile` shows approved photos, pending submissions, documented
   strains and milestones at 1, 5 and 20 accepted photos. Progress is private
-  by default, with \`public:true\` for voluntary sharing.
-- \`/growerjournal\` shows up to 12 linked, approved progress photos with
-  reported growth stages, dates and captions. Optional \`strain:\` filters to
-  one catalog name and \`public:true\` lets a grower share their own journal.
-- \`/growerwithdraw id:\` removes the contributor's private submission copy,
+  by default, with `public:true` for voluntary sharing.
+- `/growerjournal` shows up to 12 linked, approved progress photos with
+  reported growth stages, dates and captions. Optional `strain:` filters to
+  one catalog name and `public:true` lets a grower share their own journal.
+- `/growerwithdraw id:` removes the contributor's private submission copy,
   any public gallery copy and the stored entry. The submit confirmation
   includes the ID; keep it to withdraw later. Images remain in Discord's
   own storage only for as long as their messages exist, subject to Discord's
   data handling and caches.
 
-**Moderation:** \`/growerqueue\` gives managers pending photo IDs and private
-review links. \`/growerreview id: approve:true/false\` publishes the sanitized
-copy or rejects/deletes the pending copy. \`/growerremove id:\` lets managers
+**Moderation:** `/growerqueue` gives managers pending photo IDs and private
+review links. `/growerreview id: approve:true/false` publishes the sanitized
+copy or rejects/deletes the pending copy. `/growerremove id:` lets managers
 remove pending or published contributions. Approvals are serialized through
 the SQLite submission state so concurrent clicks cannot intentionally publish
 twice. A process crash between Discord publishing and database confirmation
@@ -497,12 +497,12 @@ image and claimed strain/stage become visible to viewers of the chosen gallery.
 Submission identity is saved as a salted per-server hash, not a raw Discord
 member ID. The app does not prove plant genetics or the photographer's
 ownership. Photos are **not automatically imported** into global
-\`/strainprofile\` records or offered for reuse outside that server. The
+`/strainprofile` records or offered for reuse outside that server. The
 manager should moderate labels, permissions, imagery, and local law.
 
 **Storage limitation:** Gallery and review images live in Discord channel
 posts; submission states and contributor stats share the existing
-\`LAB_STRAIN_DB_PATH\` SQLite file. **Persistent disk and a backup** are
+`LAB_STRAIN_DB_PATH` SQLite file. **Persistent disk and a backup** are
 required to preserve indices, journal links, moderation status and user
 withdrawal mapping after a Discloud redeployment. This storage durability has
 not been validated in the live hosting environment. Multiple independent bot
