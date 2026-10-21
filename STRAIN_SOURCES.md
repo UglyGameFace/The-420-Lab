@@ -132,3 +132,8 @@ When enrichment providers do not respond with a verified exact match, the bot
 shows one useful status instead of four competing error strings. No status is
 misrepresented as a strain detail. Generic photographs may still be used
 outside named strain profiles with proper credits.
+
+
+### Named photo provenance: Northern Lights
+
+A source-identified Northern Lights flower photograph is now available from Wikimedia Commons, uploaded as Northern-lights-flowering.jpg in 2007 by User Dan. License CC BY-SA 3.0, original source https://commons.wikimedia.org/wiki/File:Northern-lights-flowering.jpg. This is source-reported identification, not a genetic certificate. Only exact cultivar-name searches receive it. No generic stock/flower photo is added to other strain results.

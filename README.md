@@ -441,3 +441,10 @@ profile now distinguishes Leafly / Sensi Seeds indica references from the
 historical Kushy Hybrid label and the CI commercial breeder listing. Missing
 remote providers are collapsed into a single neutral status, not shown as
 research facts.
+
+
+### Source-attributed cultivar photography
+
+The first vetted cultivar-labelled image is **Northern Lights**, a 2007 photo credited to User Dan on Wikimedia Commons, licensed CC BY-SA 3.0:
+https://commons.wikimedia.org/wiki/File:Northern-lights-flowering.jpg
+The source identifies the pictured plant as Northern Lights; its genetics and any reader's batch are not independently verified. The bot shows this image only for an **exact Northern Lights** lookup. Other strains without an original owner-curated or comparably documented photo display **no image** rather than a generic bud. Existing Pexels fallback utilities are no longer called by the profile path.

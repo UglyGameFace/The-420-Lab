@@ -110,3 +110,41 @@ class StrainPhotoService:
             # Cache failures, too: prevent repeated requests after outages or 429.
             self._until = time.monotonic() + (21600 if photo.source == "Pexels" else 3600)
             return photo
+
+
+@dataclass(frozen=True)
+class SourceAttributedCultivarPhoto:
+    """Photo identified by a named source, not genetically authenticated."""
+    image_url: str
+    source_page: str
+    photographer: str
+    license_name: str
+    license_url: str
+    label: str
+    year: int
+
+
+# Manually reviewed source images, not search-engine or Pexels matches.
+# Wikimedia Commons: the uploader explicitly identifies this image as
+# Northern Lights. This does not independently authenticate plant genetics.
+_CULTIVAR_PHOTOS = {
+    "northernlights": SourceAttributedCultivarPhoto(
+        image_url="https://upload.wikimedia.org/wikipedia/commons/e/e9/Northern-lights-flowering.jpg",
+        source_page="https://commons.wikimedia.org/wiki/File:Northern-lights-flowering.jpg",
+        photographer="User Dan",
+        license_name="CC BY-SA 3.0",
+        license_url="https://creativecommons.org/licenses/by-sa/3.0/",
+        label="Northern Lights",
+        year=2007,
+    ),
+}
+
+
+def source_attributed_photo(name: str) -> SourceAttributedCultivarPhoto | None:
+    """Only source-labelled photos for exact catalog names, never fuzzy matches."""
+    from .strains import compact, find_matches
+    matches = find_matches(name, limit=1)
+    normalized = compact(name)
+    if not matches or matches[0].approximate or compact(matches[0].name) != normalized:
+        return None
+    return _CULTIVAR_PHOTOS.get(normalized)

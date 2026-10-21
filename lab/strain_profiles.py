@@ -356,9 +356,25 @@ def strain_embed(name: str, guild_id: int | None, store: StrainProfileStore):
                             value=(f"[Photo provenance]({url}) • declared {rights} • "
                                    "Owner-submitted identification, not independently "
                                    "authenticated from the image."), inline=False)
-    else:
+    if not embed.image.url and exact:
+        from .strain_media import source_attributed_photo
+        picture = source_attributed_photo(display)
+        if picture:
+            embed.set_image(url=picture.image_url)
+            embed.add_field(
+                name="📷 Source-attributed strain photograph",
+                value=(
+                    f"Uploaded as **{picture.label}** ({picture.year}) by "
+                    f"{picture.photographer}. "
+                    f"[Original photo]({picture.source_page}) • "
+                    f"[{picture.license_name}]({picture.license_url}). "
+                    "The source identifies the strain; genetics and your specific "
+                    "batch are not independently verified."
+                ),
+                inline=False)
+    if not embed.image.url:
         embed.add_field(name="Photo verification", value=(
-            "No photo verified for this specific named cultivar. "
+            "No source-attributed photograph for this exact strain yet. "
             "The bot will not substitute an unrelated cannabis flower picture. "
             "Open an attributed source profile for its own photos."), inline=False)
     profile = profile_for(display)

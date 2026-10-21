@@ -7,13 +7,21 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from lab.strain_media import (
-    StrainPhotoService, commons_fallback, _safe_pexels_photo)
+    StrainPhotoService, commons_fallback, _safe_pexels_photo, source_attributed_photo)
 from lab.cannlytics_client import parse_profile, strain_summary, _CACHE
 from lab.strain_profiles import StrainProfileStore
 from lab.profile_reply import build_strain_profile
 
 
 class PhotoValidationTests(unittest.TestCase):
+    def test_source_specific_image_requires_exact_strain(self):
+        photo = source_attributed_photo("Northern Lights")
+        self.assertEqual(photo.label, "Northern Lights")
+        self.assertIn("upload.wikimedia.org", photo.image_url)
+        self.assertEqual(photo.license_name, "CC BY-SA 3.0")
+        for term in ("Blue Dream", "Northern Lightz", "Northern Lights XL"):
+            self.assertIsNone(source_attributed_photo(term))
+
     def test_no_key_fallback_is_real_credited_cc0_photo(self):
         photo = commons_fallback()
         self.assertEqual(photo.source, "Wikimedia Commons • CC0")
@@ -132,7 +140,7 @@ class RichProfilePictureTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.temp.cleanup)
         self.store = StrainProfileStore(self.temp.name + "/profiles.sqlite3")
 
-    async def test_generic_photo_never_appears_as_named_cultivar(self):
+    async def test_documented_northern_lights_photo_is_not_generic(self):
         bot = SimpleNamespace(http_session=None, quota=MagicMock(),
                               strain_profiles=self.store, strain_photo_service=None)
         with patch("lab.profile_reply.sourced_summary", new_callable=AsyncMock,
@@ -140,9 +148,10 @@ class RichProfilePictureTests(unittest.IsolatedAsyncioTestCase):
                    "lab.cannlytics_client.strain_summary", new_callable=AsyncMock,
                    return_value=""):
             embed = await build_strain_profile(bot, "Northern Lights", 901)
-        self.assertIsNone(embed.image.url)
+        self.assertIn("Northern-lights-flowering.jpg", embed.image.url)
         fields = {entry.name: entry.value for entry in embed.fields}
-        self.assertIn("No photo verified", fields["Photo verification"])
+        self.assertIn("User Dan", fields["📷 Source-attributed strain photograph"])
+        self.assertIn("CC BY-SA 3.0", fields["📷 Source-attributed strain photograph"])
         self.assertNotIn("📷 Real cannabis flower photograph", fields)
         self.assertNotIn("temporarily unavailable", "\n".join(str(x.value) for x in embed.fields))
         self.assertIn("Additional source status", fields)
@@ -158,7 +167,19 @@ class RichProfilePictureTests(unittest.IsolatedAsyncioTestCase):
         fields = {entry.name: entry.value for entry in embed.fields}
         self.assertIn("🧬 Source-confirmed details & community reports", fields)
         self.assertIn("Flower & Freedom", fields["🧬 Source-confirmed details & community reports"])
+        self.assertIn("Northern-lights-flowering.jpg", embed.image.url)
+
+    async def test_unverified_strain_has_no_stock_flower_image(self):
+        bot = SimpleNamespace(http_session=None, quota=MagicMock(),
+                              strain_profiles=self.store, strain_photo_service=None)
+        with patch("lab.profile_reply.sourced_summary", new_callable=AsyncMock,
+                   return_value="No verified source."), patch(
+                   "lab.cannlytics_client.strain_summary", new_callable=AsyncMock,
+                   return_value=""):
+            embed = await build_strain_profile(bot, "Blue Dream", 901)
         self.assertIsNone(embed.image.url)
+        self.assertIn("No source-attributed photograph",
+                      {field.name: field.value for field in embed.fields}["Photo verification"])
 
     async def test_original_curated_photo_is_not_overwritten(self):
         self.store.save_curated(
