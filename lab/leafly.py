@@ -99,5 +99,5 @@ def leafly_answer(name: str) -> str:
     from .answers import clip_discord
     local = licensed_data_summary(name)
     extra = ("\n\n" + local) if local else ""
-    result = result_text(name) + "\n\n**Leafly reference:**\n" + leafly_reference(name) + extra
+    result = "**Leafly reference:**\n" + leafly_reference(name) + "\n\n" + result_text(name) + extra
     return clip_discord(result)
