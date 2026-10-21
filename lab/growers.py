@@ -10,6 +10,7 @@ from contextlib import closing
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
 import re
+import secrets
 import sqlite3
 
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -65,6 +66,8 @@ class GrowerHub:
 
     def __init__(self, profiles):
         self.profiles = profiles
+        # New each process, never printed or exposed through commands.
+        self._process_marker = secrets.token_hex(20)
         with closing(self.profiles._connect()) as db, db:
             db.execute("""CREATE TABLE IF NOT EXISTS grower_config (
                 guild TEXT PRIMARY KEY, review_channel TEXT NOT NULL,
@@ -84,10 +87,73 @@ class GrowerHub:
             if "operation_utc" not in columns:
                 db.execute("""ALTER TABLE grower_submissions
                     ADD COLUMN operation_utc TEXT NOT NULL DEFAULT ''""")
+            db.execute("""CREATE TABLE IF NOT EXISTS grower_storage_probe (
+                singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+                armed_process TEXT NOT NULL, armed_utc TEXT NOT NULL,
+                verified_utc TEXT NOT NULL DEFAULT ''
+            )""")
             db.execute("""CREATE INDEX IF NOT EXISTS idx_grower_pending
                 ON grower_submissions(guild,status,id)""")
             db.execute("""CREATE INDEX IF NOT EXISTS idx_grower_author
                 ON grower_submissions(guild,author_hash,status)""")
+
+    def _probe(self):
+        with closing(self.profiles._connect()) as db:
+            result = db.execute("PRAGMA quick_check(1)").fetchone()
+            if not result or result[0] != "ok":
+                raise RuntimeError("The Grower Showcase database integrity check failed.")
+            return db.execute(
+                """SELECT armed_process,armed_utc,verified_utc
+                FROM grower_storage_probe WHERE singleton=1""").fetchone()
+
+    def storage_status(self) -> tuple[str, str]:
+        """Return safe state and its timestamp; no filesystem paths or tokens."""
+        row = self._probe()
+        if row is None:
+            return "unarmed", ""
+        if row[2]:
+            return "verified", row[2]
+        if row[0] == self._process_marker:
+            return "armed_this_process", row[1]
+        return "ready_to_verify", row[1]
+
+    def arm_storage_probe(self) -> None:
+        """Run before intentionally restarting/redeploying the application."""
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with closing(self.profiles._connect()) as db, db:
+            db.execute(
+                """INSERT INTO grower_storage_probe
+                (singleton,armed_process,armed_utc,verified_utc)
+                VALUES(1,?,?,'')
+                ON CONFLICT(singleton) DO UPDATE SET
+                armed_process=excluded.armed_process,
+                armed_utc=excluded.armed_utc,
+                verified_utc=''""",
+                (self._process_marker, now))
+
+    def verify_storage_probe(self) -> str:
+        """Require a different bot process and the same persisted database."""
+        with closing(self.profiles._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT armed_process FROM grower_storage_probe
+                WHERE singleton=1""").fetchone()
+            if not row:
+                raise ValueError("First run /growerstorage action:arm before restarting.")
+            if row[0] == self._process_marker:
+                raise ValueError("Still in the same bot process. Restart or redeploy, then verify.")
+            result = db.execute("PRAGMA quick_check(1)").fetchone()
+            if not result or result[0] != "ok":
+                raise RuntimeError("Database integrity check failed after process restart.")
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            db.execute(
+                "UPDATE grower_storage_probe SET verified_utc=? WHERE singleton=1",
+                (now,))
+            return now
+
+    def storage_ready(self) -> bool:
+        """This proves at least one cross-process DB continuity check, not backups."""
+        return self.storage_status()[0] == "verified"
 
     def configuration(self, guild_id: int):
         with closing(self.profiles._connect()) as db:

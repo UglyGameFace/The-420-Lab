@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from io import BytesIO
 import logging
+import os
 
 import discord
 from discord import app_commands
@@ -107,6 +108,56 @@ async def _remove_submission(interaction: discord.Interaction, bot, submission_i
 def register_grower_commands(bot) -> None:
     """Install once onto the existing command tree; no new Discord client."""
 
+    @bot.tree.command(name="growerstorage", description="Application owner: test Grower Showcase database continuity")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(action="Arm before restarting, verify in the new process, or inspect status")
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Storage status", value="status"),
+        app_commands.Choice(name="Arm restart/redeploy test", value="arm"),
+        app_commands.Choice(name="Verify continuity after restart", value="verify"),
+    ])
+    async def growerstorage(interaction: discord.Interaction, action: str = "status"):
+        if not await bot.is_owner(interaction.user):
+            await interaction.response.send_message(
+                "Only the application owner can perform the storage continuity test.",
+                ephemeral=True)
+            return
+        try:
+            if action == "arm":
+                bot.growers.arm_storage_probe()
+                result = ("**Storage probe armed.** New member photo uploads are paused. "
+                          "Restart or redeploy the bot, then use "
+                          "`/growerstorage action:verify` from this server. "
+                          "Do not infer that a successful simple restart proves "
+                          "data survives a full redeployment.")
+            elif action == "verify":
+                verified = bot.growers.verify_storage_probe()
+                result = (f"**Cross-process SQLite continuity verified** at {verified}. "
+                          "The previous probe was found after a process change, and "
+                          "the database passed its integrity check. "
+                          "A separate redeployment test and backup still need validation.")
+            elif action == "status":
+                state, timestamp = bot.growers.storage_status()
+                summary = {
+                    "unarmed": "No continuity probe has been armed.",
+                    "armed_this_process": "Armed in the current process; restart is still required.",
+                    "ready_to_verify": "Probe recovered in a different process; run action:verify.",
+                    "verified": "Cross-process continuity previously verified.",
+                }[state]
+                result = (f"**Grower SQLite storage:** {summary} "
+                          + (f"Last checkpoint: {timestamp}." if timestamp else "")
+                          + " This is not proof of Discloud redeploy retention or backups.")
+            else:
+                raise ValueError("Choose status, arm, or verify.")
+        except ValueError as exc:
+            result = str(exc)
+        except Exception:
+            log.exception("Grower storage continuity check failed")
+            result = "Storage check failed. Inspect the bot logs and configured database path."
+        await interaction.response.send_message(
+            result, ephemeral=True, allowed_mentions=NO_MENTIONS)
+
     @bot.tree.command(name="growerconfig", description="Manager: enable a private-reviewed grower photo gallery")
     @app_commands.guild_only()
     @app_commands.default_permissions(manage_guild=True)
@@ -174,6 +225,13 @@ def register_grower_commands(bot) -> None:
             review, _, enabled = _configured_channels(interaction, bot.growers)
             if not enabled:
                 raise ValueError("New grower submissions are paused in this server.")
+            if (os.getenv("LAB_GROWER_REQUIRE_STORAGE_PROOF", "true").lower()
+                    not in ("false", "0", "off")):
+                if not bot.growers.storage_ready():
+                    raise ValueError(
+                        "Grower uploads are paused until the application owner verifies "
+                        "database continuity with /growerstorage. This protects member "
+                        "photos and withdrawal records across bot restarts.")
             name = verified_strain(strain)
             if stage not in STAGES:
                 raise ValueError("Unsupported growth stage.")
