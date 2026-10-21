@@ -40,7 +40,7 @@ async def probe():
                 if name == "PubMed" and not result:
                     raise ValueError("No papers returned")
                 if name in ("Find My Seeds", "Flower & Freedom") and not result.startswith("**"):
-                    raise ValueError("No exact public strain profile returned")
+                    raise ValueError("No exact public profile: " + str(result)[:180])
                 print(f"PASS {name}: response parsed successfully")
             except Exception as exc:
                 print(f"FAIL {name}: {type(exc).__name__}: {exc}", file=sys.stderr)
