@@ -75,6 +75,39 @@ class GrowerStoreTests(unittest.TestCase):
             db.execute("UPDATE grower_submissions SET operation_utc=? WHERE id=?",
                        (old, item_id))
 
+    def test_storage_probe_requires_new_process_and_survives_reinstantiation(self):
+        self.assertEqual(self.hub.storage_status(), ("unarmed", ""))
+        self.assertFalse(self.hub.storage_ready())
+        with self.assertRaisesRegex(ValueError, "First run"):
+            self.hub.verify_storage_probe()
+        self.hub.arm_storage_probe()
+        self.assertEqual(self.hub.storage_status()[0], "armed_this_process")
+        self.assertFalse(self.hub.storage_ready())
+        with self.assertRaisesRegex(ValueError, "Still in the same"):
+            self.hub.verify_storage_probe()
+        new_process = GrowerHub(StrainProfileStore(self.path))
+        self.assertEqual(new_process.storage_status()[0], "ready_to_verify")
+        verified = new_process.verify_storage_probe()
+        self.assertEqual(new_process.storage_status(), ("verified", verified))
+        self.assertTrue(self.hub.storage_ready())
+        restarted_again = GrowerHub(StrainProfileStore(self.path))
+        self.assertTrue(restarted_again.storage_ready())
+        restarted_again.arm_storage_probe()
+        self.assertFalse(restarted_again.storage_ready())
+        self.assertEqual(restarted_again.storage_status()[0], "armed_this_process")
+
+    def test_storage_probe_does_not_change_member_records_or_curated_content(self):
+        self.profiles.save_curated(
+            "Blue Dream", "Original carefully attributed botanical cultivar description.",
+            "https://example.org/attribution", "", "original")
+        upload_id = self.submit()
+        self.hub.arm_storage_probe()
+        check = GrowerHub(StrainProfileStore(self.path))
+        check.verify_storage_probe()
+        self.assertEqual(self.hub.item(self.guild, upload_id)[8], "pending")
+        self.assertTrue(self.profiles.curated("Blue Dream"))
+        self.assertNotIn("secret", repr(check.storage_status()))
+
     def test_upload_reservation_persists_across_restart_and_can_be_adopted(self):
         upload_id = self.hub.begin_upload(
             self.guild, 123, "GardenGamer", "Blue Dream", "flowering", "", 101)
@@ -287,11 +320,13 @@ class GrowerCommandsTests(unittest.TestCase):
         names = {command.name: command for command in bot.tree.get_commands()}
         for cmd in ("growerconfig", "growersubmit", "growerqueue", "growerreview",
                     "growerprofile", "growerjournal", "growerwithdraw", "growerremove",
-                    "growerrecover"):
+                    "growerrecover", "growerstorage"):
             self.assertIn(cmd, names)
         for manager in ("growerconfig", "growerqueue", "growerreview", "growerremove",
                         "growerrecover"):
+
             self.assertTrue(names[manager].default_permissions.manage_guild)
+        self.assertTrue(names["growerstorage"].default_permissions.administrator)
 
     def test_upload_and_profile_are_private_by_default(self):
         from inspect import signature
@@ -433,11 +468,72 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
                     interaction, sid, confirmed_not_published=True)
             self.assertEqual(hub.item(22, sid)[8], "pending")
 
+    async def test_upload_blocked_without_verified_storage_or_photo_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            hub.configure(22, 101, 102)
+            review = SimpleNamespace(
+                id=101, is_nsfw=lambda: True,
+                permissions_for=lambda _: SimpleNamespace(view_channel=False),
+                send=AsyncMock())
+            interaction = SimpleNamespace(
+                guild_id=22, guild=SimpleNamespace(default_role=object(), me=object()),
+                user=SimpleNamespace(id=400, display_name="Grower"),
+                response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+                followup=SimpleNamespace(send=AsyncMock()))
+            photo = SimpleNamespace(size=350, read=AsyncMock())
+            with patch.object(bot, "growers", hub), \
+                 patch.dict("os.environ", {"LAB_GROWER_REQUIRE_STORAGE_PROOF": "true"}), \
+                 patch("lab.grower_commands._configured_channels",
+                       return_value=(review, None, True)), \
+                 patch("lab.grower_commands._post_permissions", return_value=True):
+                await bot.tree.get_command("growersubmit").callback(
+                    interaction, "Blue Dream", "flowering", photo, True)
+            photo.read.assert_not_awaited()
+            review.send.assert_not_awaited()
+            self.assertIn("/growerstorage", interaction.response.send_message.await_args.args[0])
+            self.assertFalse(hub.storage_ready())
+
+    async def test_storage_command_enforces_application_ownership(self):
+        interaction = SimpleNamespace(
+            user=SimpleNamespace(id=987),
+            response=SimpleNamespace(send_message=AsyncMock()))
+        with patch.object(bot, "is_owner", new_callable=AsyncMock, return_value=False):
+            await bot.tree.get_command("growerstorage").callback(interaction, "arm")
+        self.assertIn("application owner",
+                      interaction.response.send_message.await_args.args[0])
+        self.assertTrue(interaction.response.send_message.await_args.kwargs["ephemeral"])
+
+    async def test_storage_command_arm_verify_and_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
+            hub = GrowerHub(store)
+            interaction = SimpleNamespace(
+                user=SimpleNamespace(id=987),
+                response=SimpleNamespace(send_message=AsyncMock()))
+            with patch.object(bot, "growers", hub), \
+                 patch.object(bot, "is_owner", new_callable=AsyncMock, return_value=True):
+                cmd = bot.tree.get_command("growerstorage").callback
+                await cmd(interaction, "arm")
+                self.assertFalse(hub.storage_ready())
+                await cmd(interaction, "verify")
+                self.assertFalse(hub.storage_ready())
+                self.assertIn("Still in the same", interaction.response.send_message.await_args.args[0])
+                bot.growers = GrowerHub(StrainProfileStore(store.path))
+                await cmd(interaction, "verify")
+                self.assertTrue(bot.growers.storage_ready())
+                await cmd(interaction, "status")
+                self.assertIn("previously verified",
+                              interaction.response.send_message.await_args.args[0])
+
     async def test_uncertain_upload_send_keeps_reservation_for_recovery(self):
         with tempfile.TemporaryDirectory() as directory:
             store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
             hub = GrowerHub(store)
             hub.configure(22, 101, 102)
+            hub.arm_storage_probe()
+            GrowerHub(StrainProfileStore(store.path)).verify_storage_probe()
             review = SimpleNamespace(
                 id=101, is_nsfw=lambda: True,
                 permissions_for=lambda _: SimpleNamespace(view_channel=False),
@@ -470,6 +566,8 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
             store = StrainProfileStore(str(Path(directory) / "photos.sqlite3"))
             hub = GrowerHub(store)
             hub.configure(22, 101, 102)
+            hub.arm_storage_probe()
+            GrowerHub(StrainProfileStore(store.path)).verify_storage_probe()
             review = SimpleNamespace(
                 id=101, is_nsfw=lambda: True,
                 permissions_for=lambda _: SimpleNamespace(view_channel=False),
