@@ -325,6 +325,41 @@ class StrainCatalogTests(unittest.TestCase):
             self.assertIn("https://www.leafly.com/strains" + slug, message)
             self.assertNotIn("THC 25%", message)
 
+    def test_leafly_name_mirror_activated_by_default(self):
+        from lab.strains import load_leafly_name_mirror, find_matches, result_text
+        records = load_leafly_name_mirror()
+        self.assertGreaterEqual(len(records), 2200)
+        self.assertLessEqual(len(records), 4762)
+        self.assertIn("GSC", records)
+        hit = find_matches("GSC")
+        self.assertTrue(hit)
+        self.assertEqual(hit[0].name, "GSC")
+        self.assertIn("Leafly-name mirror", hit[0].sources[0])
+        response = result_text("GSC")
+        self.assertIn("historical, third-party", response)
+        self.assertNotIn("ratings", response.lower())
+
+    def test_licensed_source_priority_over_legacy_mirror(self):
+        from lab.strains import find_matches
+        blue_dream = find_matches("Blue Dream")
+        self.assertTrue(blue_dream)
+        self.assertIn("CI-Strains-Pro 2026", blue_dream[0].sources)
+        self.assertNotIn("Leafly-name mirror", blue_dream[0].sources)
+
+    def test_legacy_name_mirror_does_not_expose_unlicensed_reviews(self):
+        from lab.strains import load_leafly_name_mirror
+        from pathlib import Path
+        import json
+        data = Path(__file__).resolve().parents[1] / "data" / "leafly_names_legacy.json"
+        payload = json.loads(data.read_text(encoding="utf-8"))
+        self.assertEqual(payload["rows_in_original"], 4762)
+        self.assertEqual(payload["schema"], 1)
+        self.assertEqual(len(payload["records"]), len(load_leafly_name_mirror()))
+        self.assertEqual(len(payload["records"]), len(set(payload["records"])))
+        self.assertNotIn("description", payload)
+        self.assertNotIn("reviews", payload)
+        self.assertNotIn("thc_level", payload)
+
     def test_lookup_does_not_allow_mass_mentions(self):
         from lab.strains import lookup, result_text
         self.assertEqual(lookup("@everyone"), [])
