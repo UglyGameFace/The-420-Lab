@@ -12,3 +12,6 @@ lab-quotas.sqlite3*
 # Owner-supplied licensed Leafly data is never committed.
 leafly-authorized.csv
 data/leafly_authorized.csv
+
+# Private locally authored strain profile and ratings database
+strain-profiles.sqlite3*

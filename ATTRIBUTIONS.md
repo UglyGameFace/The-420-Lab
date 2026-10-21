@@ -44,3 +44,21 @@ The entries are commercial strain-name references, not verified chemical
 identities, current inventory, clinical advice, or evidence of benefits.
 The original author does not endorse The Weed Doctor.
 For source-specific details, see the upstream DATA_LICENSE.md.
+
+## External research and image sources (linked, not republished)
+
+Cannlytics Cannabis Results (CC BY 4.0 data, with possible embedded third-party
+rights): https://huggingface.co/datasets/cannlytics/cannabis_results
+License: https://creativecommons.org/licenses/by/4.0/
+This release links the dataset as a way to inspect source-specific lab tests;
+it does not copy its lab reports into a strain-wide potency claim.
+
+Wikimedia Commons: https://commons.wikimedia.org/wiki/Special:MediaSearch
+Images are available under varying, image-specific licenses. No Commons
+images are bundled or displayed without individual source attribution and
+a rights declaration from the application owner.
+
+Leafly: https://www.leafly.com/info/terms-of-use
+The Weed Doctor does not bulk-copy its proprietary review text, descriptions,
+media, or user-rating aggregates. Independent first-party server ratings
+are not affiliated with Leafly.

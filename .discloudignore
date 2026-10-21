@@ -9,3 +9,6 @@ tests/
 *.log
 
 lab-quotas.sqlite3*
+
+# Private locally authored strain profile and ratings database
+strain-profiles.sqlite3*

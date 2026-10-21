@@ -235,7 +235,7 @@ The Weed Doctor now includes a names-only historical Leafly-mirror supplement
 at data/leafly_names_legacy.json, enabled by default. The recovered mirror
 contains 4,762 CSV rows and 4,754 normalized distinct names. Of those,
 2,298 unique names were missing from our licensed catalogs and are added
-as separate name references, yielding 30,593 distinct names overall.
+as separate name references, yielding 30,582 distinct normalized searchable names overall (some pre-existing aliases and collisions are deduplicated at runtime).
 
 No Discloud environment switch or third-party API key is required for this
 name-only lookup. Name-only records are labeled as historical third-party
@@ -248,3 +248,60 @@ percentages were not incorporated or redistributed. The private CSV
 adapter can still read an authorized full copy when supplied. The GitHub
 mirror has no license granting reuse of those content fields, and Leafly's
 terms prohibit unauthorized redistribution.
+
+## Public strain profiles, database transparency and original ratings
+
+Members can use **/straindb** or the persistent panel's **📊 Database Info**
+button to see how many distinct strain names the bot really indexes and the
+dates/limitations of its three datasets. It currently indexes **30,582**
+distinct normalized names across Kushy (snapshot 2017-11-14), CI-Strains-Pro
+(release year 2026), and an old third-party Leafly-name mirror whose actual
+collection date is unverified. The app's local index was assembled on
+2026-10-20. **Deployments do not automatically refresh any of the datasets**.
+
+Use **/strainprofile name:** to see a richer, credited profile inside Discord:
+name/breeder and source, a description and genuine image only when supplied
+with reuse authorization, Leafly's original external page (if verified), and
+a link to independent lab samples. The **Find Strains** public-panel action
+opens the same richer profile.
+
+Additional data sources:
+- **Cannlytics Cannabis Results**:
+  https://huggingface.co/datasets/cannlytics/cannabis_results
+  The published multi-state lab-results archive carries CC BY 4.0 terms,
+  with caveats for third-party data. Chemical results represent individual
+  samples, NOT the potency/effects of every product sharing a cultivar name.
+  The collection is large and is **linked rather than downloaded to Discloud**.
+  API access requires a separate Cannlytics token.
+- **Wikimedia Commons**:
+  https://commons.wikimedia.org/wiki/Special:MediaSearch
+  Images are licensed individually, and licensing/name matching must be
+  verified before inclusion. Images are not randomly auto-selected.
+- **Leafly** original profiles and the historical name-only mirror. Its
+  proprietary review content and photos are not licensed to this bot.
+- **OpenTHC** https://api.openthc.org/ is a proposed interoperability
+  schema for cultivar, product and lab data, **not** a live free strain
+  information service.
+
+To supply original/approved descriptions and licensed images across the bot,
+the Discord **application owner only** uses
+**/doctorstrainset name description source_url rights image_url**.
+The bot records the declared rights, source URL and profile update date and
+renders them in /strainprofile. A wrong entry can be deleted with
+**/doctorstrainclear name**. Do not submit Leafly proprietary material
+unless you separately have a valid redistribution license; the rights
+selector is a declaration, not a substitute for an actual grant.
+
+For independent first-party scores, a server manager can opt in with
+**/strainreviews enabled:true**. Members then use **/strainrate** (1–5),
+one updateable score per user per strain per server. Only anonymous aggregates
+(count/mean) are shown. Reviews are NOT Leafly reviews or medical evidence.
+Managers can disable collection or erase all reviews for their server with
+**/strainreviews enabled:false clear:true**. Disabled by default.
+
+Those curated descriptions, image references and original ratings are stored
+in a **local SQLite file** (`strain-profiles.sqlite3` by default; override with
+`LAB_STRAIN_DB_PATH`). Actual retention after Discloud file replacement is
+not verified. Use durable storage and backups when available; the anonymous
+source catalogs remain usable even if review storage is lost. No database
+records are committed to public GitHub.
