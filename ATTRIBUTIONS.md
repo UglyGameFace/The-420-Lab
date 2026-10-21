@@ -25,3 +25,22 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## CI-Strains-Pro 2026: supplemental strain-name catalog
+
+Source: https://github.com/Shannon-Goddard/ci-strains-pro
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License text: https://creativecommons.org/licenses/by/4.0/
+
+Attribution required by the creator: Cannabis Intelligence Database by Shannon Goddard
+https://github.com/Shannon-Goddard/ci-strains-pro | Licensed under CC BY 4.0
+
+The file data/strains_2026.json is an edited subset of the 2026 upstream CSV:
+names, listed breeders and aliases were selected, filtered and deduplicated.
+Vendor images, source descriptions, medical-effect claims, and inferred
+THC/CBD potency numbers were deliberately excluded.
+
+The entries are commercial strain-name references, not verified chemical
+identities, current inventory, clinical advice, or evidence of benefits.
+The original author does not endorse The Weed Doctor.
+For source-specific details, see the upstream DATA_LICENSE.md.
