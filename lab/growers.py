@@ -103,7 +103,8 @@ class GrowerHub:
 
     def submit(self, guild_id: int, user_id: int, byline: str,
                strain: str, stage: str, caption: str, review_message: int) -> int:
-        if not (self.configuration(guild_id) and self.configuration(guild_id)[2]):
+        setting = self.configuration(guild_id)
+        if not setting or not setting[2]:
             raise ValueError("Grower Showcase has not been configured in this server.")
         name = verified_strain(strain)
         if stage not in STAGES:
@@ -196,6 +197,16 @@ class GrowerHub:
             db.execute(
                 "DELETE FROM grower_submissions WHERE guild=? AND id=? AND status=?",
                 (str(guild_id), submission_id, status))
+
+    def my_uploads(self, guild_id: int, user_id: int):
+        """Recover submission IDs for private withdrawal, even after restart."""
+        with closing(self.profiles._connect()) as db:
+            return db.execute(
+                """SELECT id,strain,status FROM grower_submissions
+                WHERE guild=? AND author_hash=?
+                AND status IN ('pending','approved')
+                ORDER BY id DESC LIMIT 10""",
+                (str(guild_id), self._identity(guild_id, user_id))).fetchall()
 
     def journal(self, guild_id: int, user_id: int, name: str = ""):
         """A contributor's approved progress timeline, never other members' posts."""
