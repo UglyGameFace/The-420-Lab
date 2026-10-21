@@ -99,7 +99,9 @@ class StrainProfileTests(unittest.TestCase):
         self.assertIn("not verified genetics", identity)
         self.assertIn("not necessarily the original breeder", identity)
         self.assertNotIn("**Catalog type:** Hybrid", identity)
-        self.assertIsNone(embed.image.url)
+        self.assertIn("Northern-lights-flowering.jpg", embed.image.url)
+        self.assertIn("User Dan", fields["📷 Source-attributed strain photograph"])
+        self.assertIn("CC BY-SA 3.0", fields["📷 Source-attributed strain photograph"])
 
     def test_source_specific_labels_for_other_strains(self):
         embed = strain_embed("Blue Dream", 999, self.store)
@@ -111,7 +113,7 @@ class StrainProfileTests(unittest.TestCase):
     def test_missing_license_keeps_external_image_and_description_offline(self):
         embed = strain_embed("Blue Dream", 999, self.store)
         self.assertIsNone(embed.image.url)
-        self.assertIn("No photo verified", "\n".join(f.value for f in embed.fields))
+        self.assertIn("No source-attributed photograph", "\n".join(f.value for f in embed.fields))
 
     def test_owner_can_add_and_remove_credited_description_and_photo(self):
         self.store.save_curated(
