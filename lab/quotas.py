@@ -210,6 +210,12 @@ class QuotaGate:
             ("minute", 60, self.limit("gemini_minute")),
             ("daily", 86400, self.limit("gemini_daily"))), now)
 
+    def take_cannalib(self, *, now: int | None = None):
+        """Separate conservative anonymous budget below CannaLib's free plan."""
+        self._take_global("cannalib", (
+            ("hour", 3600, 35),
+            ("daily", 86400, 180)), now)
+
     def take_provider(self, *, now: int | None = None):
         self._take_global("provider", (
             ("minute", 60, self.limit("api_minute")),
