@@ -59,7 +59,8 @@ def _submission_card(byline: str, strain: str, stage: str, caption: str,
     if caption:
         card.add_field(name="Grow notes", value=caption[:220], inline=False)
     card.set_image(url="attachment://grower.jpg")
-    marker = f"Grower submission #{submission_id} | " if approved and submission_id else ""
+    marker = (f"Grower submission #{submission_id} | " if approved else
+              f"Grower upload #{submission_id} | ") if submission_id else ""
     card.set_footer(text=(
         marker + "Member-submitted identification, not genetically verified. "
         "Original photo shared with this server by its contributor."
@@ -78,24 +79,27 @@ async def _remove_message(channel: discord.TextChannel, message_id: int, bot) ->
 
 
 async def _remove_submission(interaction: discord.Interaction, bot, submission_id: int,
-                             *, user_id: int | None) -> None:
+                             *, user_id: int | None, purpose: str = "remove") -> None:
     hub = bot.growers
-    row = hub.lock(interaction.guild_id, submission_id, purpose="remove", user_id=user_id)
+    row = hub.lock(interaction.guild_id, submission_id, purpose=purpose, user_id=user_id)
+    deletion_started = False
     try:
         if row[7]:
             if not row[10]:
                 raise ValueError("The saved gallery channel is missing; contact staff.")
             gallery = await _saved_channel(interaction, row[10])
             if gallery:
+                deletion_started = True
                 await _remove_message(gallery, int(row[7]), bot)
         review = await _saved_channel(interaction, row[9])
         if review:
+            deletion_started = True
             await _remove_message(review, int(row[6]), bot)
         hub.delete(interaction.guild_id, submission_id, "removing")
     except Exception:
-        # A restart may resume a partially completed removal. Keep its durable
-        # state on a retry failure; otherwise return the original state.
-        if row[8] in ("pending", "approved"):
+        # Once a Discord delete starts, its result may be uncertain. Keep the
+        # durable removal state for an idempotent staff/member retry.
+        if not deletion_started and row[8] in ("pending", "approved"):
             hub.unlock(interaction.guild_id, submission_id, row[8])
         raise
 
@@ -177,6 +181,11 @@ def register_grower_commands(bot) -> None:
             byline = clean_caption(interaction.user.display_name, maximum=45) or "Community grower"
             if photo.size <= 0 or photo.size > MAX_UPLOAD_BYTES:
                 raise ValueError("Upload one photo under 8 MiB.")
+            if not review.is_nsfw() or review.permissions_for(interaction.guild.default_role).view_channel:
+                raise ValueError("The review channel must remain private and age-restricted.")
+            member = interaction.guild.me
+            if not member or not _post_permissions(review, member):
+                raise ValueError("The bot no longer has review-channel upload permissions.")
         except ValueError as exc:
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
@@ -186,24 +195,31 @@ def register_grower_commands(bot) -> None:
         try:
             data = await photo.read()
             normalized = await asyncio.to_thread(photo_as_jpeg, data)
+            entry_id = bot.growers.begin_upload(
+                interaction.guild_id, interaction.user.id, byline,
+                name, stage, caption, review.id)
+            # An upload may succeed despite an API timeout. Never delete the
+            # reservation or blindly resend; staff reconcile its unique marker.
             message = await review.send(
-                embed=_submission_card(byline, name, stage, caption, approved=False),
+                embed=_submission_card(byline, name, stage, caption,
+                                       approved=False, submission_id=entry_id),
                 file=discord.File(BytesIO(normalized), filename="grower.jpg"),
                 allowed_mentions=NO_MENTIONS)
-            try:
-                entry_id = bot.growers.submit(
-                    interaction.guild_id, interaction.user.id, byline,
-                    name, stage, caption, message.id, review.id)
-            except Exception:
-                await message.delete()
-                raise
+            bot.growers.finish_upload(interaction.guild_id, entry_id, message.id)
         except ValueError as exc:
             await interaction.followup.send(str(exc), ephemeral=True)
             return
         except Exception:
-            log.exception("Grower photo submission failed")
-            await interaction.followup.send(
-                "Submission failed. Check showcase channel permissions and storage.", ephemeral=True)
+            log.exception("Grower photo submission failed; reserved_id=%s",
+                          locals().get("entry_id"))
+            if "entry_id" in locals():
+                notice = (f"Upload **#{entry_id}** could not be confirmed. Do not resend it. "
+                          "After five minutes, staff can inspect /growerqueue and "
+                          "use /growerrecover to reconcile the original photo.")
+            else:
+                notice = "Submission failed before posting. Check image, permissions and storage."
+            await interaction.followup.send(notice, ephemeral=True,
+                                            allowed_mentions=NO_MENTIONS)
             return
         await interaction.followup.send(
             f"Your grow photo **#{entry_id}** is awaiting staff review. "
@@ -246,9 +262,26 @@ def register_grower_commands(bot) -> None:
             await interaction.response.send_message("Use a valid submission number.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
+        if not approve:
+            try:
+                await _remove_submission(interaction, bot, id, user_id=None, purpose="reject")
+            except ValueError as exc:
+                await interaction.followup.send(str(exc), ephemeral=True)
+            except Exception:
+                log.exception("Grower rejection did not finish")
+                await interaction.followup.send(
+                    "Rejection could not be confirmed. Do not retry immediately; use "
+                    "/growerqueue and /growerrecover if the removal was interrupted.",
+                    ephemeral=True)
+            else:
+                await interaction.followup.send(
+                    f"Submission **#{id}** rejected and deleted.",
+                    ephemeral=True, allowed_mentions=NO_MENTIONS)
+            return
         hub = bot.growers
         review_message = None
         gallery_message = None
+        publication_uncertain = False
         try:
             item = hub.lock(interaction.guild_id, id, purpose="review")
             try:
@@ -270,6 +303,9 @@ def register_grower_commands(bot) -> None:
                         raise ValueError("The original review photo is missing.")
                     attachment = await review_message.attachments[0].to_file(
                         filename="grower.jpg")
+                    # A network error may occur after Discord accepted the post.
+                    # Keep the durable review lock until staff reconcile it.
+                    publication_uncertain = True
                     gallery_message = await gallery.send(
                         embed=_submission_card(item[2], item[3], item[4], item[5],
                                                approved=True, submission_id=id),
@@ -280,15 +316,12 @@ def register_grower_commands(bot) -> None:
                         try:
                             await gallery_message.delete()
                             gallery_message = None
+                            publication_uncertain = False
                         except discord.HTTPException:
                             log.exception("Review publication needs manual reconciliation for #%s", id)
                         raise
-                else:
-                    if review:
-                        await _remove_message(review, int(item[6]), bot)
-                    hub.delete(interaction.guild_id, id, "reviewing")
             except Exception:
-                if gallery_message is None:
+                if not publication_uncertain:
                     hub.unlock(interaction.guild_id, id, "pending")
                 raise
         except ValueError as exc:
@@ -297,11 +330,12 @@ def register_grower_commands(bot) -> None:
         except Exception:
             log.exception("Grower review failed")
             await interaction.followup.send(
-                "Review failed. Verify channels and retry. If already posted publicly, "
-                "avoid approving twice and contact the application owner.", ephemeral=True)
+                "Review could not be confirmed. Do not approve it again immediately. "
+                "If the request interrupted, staff can use /growerqueue and "
+                "/growerrecover after five minutes.", ephemeral=True)
             return
         await interaction.followup.send(
-            f"Submission **#{id}** {'approved and posted' if approve else 'rejected and deleted'}.",
+            f"Submission **#{id}** approved and posted.",
             ephemeral=True, allowed_mentions=NO_MENTIONS)
 
     @bot.tree.command(name="growerrecover", description="Manager: reconcile an interrupted photo review or removal")
@@ -309,7 +343,7 @@ def register_grower_commands(bot) -> None:
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.describe(id="Interrupted submission number from /growerqueue",
-                           confirmed_not_published="Only after manually confirming no gallery post exists")
+                           confirmed_not_published="Only after checking original review/gallery channel for any posted photo")
     async def growerrecover(interaction: discord.Interaction, id: int,
                             confirmed_not_published: bool = False):
         if id < 1:
@@ -324,6 +358,34 @@ def register_grower_commands(bot) -> None:
             elif item[8] == "removing":
                 await _remove_submission(interaction, bot, id, user_id=None)
                 message = f"Interrupted removal for **#{id}** resumed and the entry was erased."
+            elif item[8] == "uploading":
+                if not hub.upload_is_interrupted(interaction.guild_id, id):
+                    message = "That upload is still active. Wait five minutes before recovery."
+                else:
+                    found = []
+                    review = await _saved_channel(interaction, item[9])
+                    if review is not None:
+                        marker = f"Grower upload #{id} | "
+                        async for post in review.history(limit=250):
+                            if (post.author.id == bot.user.id
+                                    and any((embed.footer.text or "").startswith(marker)
+                                            for embed in post.embeds)):
+                                found.append(post)
+                    if len(found) > 1:
+                        message = ("Multiple private review photos match this ID. "
+                                   "Resolve the duplicates manually before recovery.")
+                    elif len(found) == 1:
+                        hub.finish_upload(interaction.guild_id, id, found[0].id)
+                        message = (f"Recovered upload **#{id}** into the staff queue. "
+                                   "No duplicate was posted.")
+                    elif confirmed_not_published:
+                        hub.discard_interrupted_upload(interaction.guild_id, id)
+                        message = f"Unposted upload reservation **#{id}** cleared."
+                    else:
+                        message = ("No matching photo was found in the last 250 review-channel "
+                                   "messages. Search the **entire original channel** before "
+                                   "setting confirmed_not_published:true. The reservation "
+                                   "is preserved to prevent losing track of a posted photo.")
             elif item[8] != "reviewing":
                 message = f"Submission **#{id}** is **{item[8]}**. No recovery is needed."
             elif not hub.review_is_interrupted(interaction.guild_id, id):
