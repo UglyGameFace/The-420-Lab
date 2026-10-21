@@ -49,7 +49,7 @@ def canonical(value: str) -> str:
 
 def is_valid_query(value: str) -> bool:
     return (2 <= len(value.strip()) <= 60
-            and not any(char in value for char in ("@", "<", ">", "\n", "\r", "\x00"))
+            and not any(char in value for char in ("@", "<", ">", "\n", "\r", "\x00", chr(96)))
             and "://" not in value
             and bool(re.search(r"[A-Za-z0-9]", value)))
 
@@ -95,4 +95,9 @@ def leafly_reference(name: str) -> str:
 
 def leafly_answer(name: str) -> str:
     from .strains import result_text
-    return result_text(name) + "\n\n**Leafly reference:**\n" + leafly_reference(name)
+    from .leafly_csv import licensed_data_summary
+    from .answers import clip_discord
+    local = licensed_data_summary(name)
+    extra = ("\n\n" + local) if local else ""
+    result = result_text(name) + "\n\n**Leafly reference:**\n" + leafly_reference(name) + extra
+    return clip_discord(result)
