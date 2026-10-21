@@ -400,6 +400,9 @@ class GrowerHub:
             db.execute(
                 "DELETE FROM grower_submissions WHERE guild=? AND id=? AND status='uploading'",
                 (str(guild_id), submission_id))
+            db.execute(
+                "DELETE FROM grower_stage_queue WHERE guild=? AND submission=?",
+                (str(guild_id), submission_id))
 
     def pending(self, guild_id: int):
         with closing(self.profiles._connect()) as db:
@@ -482,14 +485,18 @@ class GrowerHub:
             if user_id is not None and item[1] != self._identity(guild_id, user_id):
                 raise ValueError("You may only withdraw your own submissions.")
             if purpose == "remove" and item[8] == "uploading":
-                # Incoming R2 copy can be cancelled, but never delete an image
-                # while its processor may already be posting to Discord.
+                # A receiving transfer must have timed out before cancellation.
+                # Never delete while a processor may have sent a Discord post.
                 stage = db.execute(
                     """SELECT state FROM grower_stage_queue
                     WHERE guild=? AND submission=?""",
                     (str(guild_id), submission_id)).fetchone()
                 if stage and stage[0] == "receiving":
-                    allowed = (*allowed, "uploading")
+                    started = db.execute(
+                        "SELECT operation_utc FROM grower_submissions WHERE guild=? AND id=?",
+                        (str(guild_id), submission_id)).fetchone()[0]
+                    if self._stale(started):
+                        allowed = (*allowed, "uploading")
             if item[8] not in allowed:
                 if not (purpose == "remove" and item[8] == "removing"):
                     raise ValueError("Submission is already being processed.")
