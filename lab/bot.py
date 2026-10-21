@@ -20,6 +20,7 @@ from .leafly import leafly_reference, leafly_answer
 from .strain_profiles import StrainProfileStore, database_embed, strain_embed, source_directory_embed
 from .rich_sources import sourced_summary
 from .profile_reply import build_strain_profile
+from .strain_media import StrainPhotoService
 from .health import LabHealth
 from .quotas import QuotaGate, QuotaExceeded
 from .control import OwnerControlView, panel as owner_panel
@@ -38,6 +39,7 @@ class LabBot(commands.Bot):
         self.health = LabHealth()
         self.quota = QuotaGate()
         self.strain_profiles = StrainProfileStore()
+        self.strain_photo_service = None
         logger.info("Quota ledger at launch: %s", self.quota.continuity_description())
         self._heartbeat_task = None
 
@@ -45,6 +47,7 @@ class LabBot(commands.Bot):
         self.http_session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=18),
             headers={"User-Agent": "TheWeedDoctor/0.1 (Discord cannabis research bot)"})
+        self.strain_photo_service = StrainPhotoService(self.http_session, quota=self.quota)
         self.science = ScienceSources(self.http_session, os.getenv("NCBI_API_KEY", ""),
                                      os.getenv("OPENFDA_API_KEY", ""), quota=self.quota)
         key = os.getenv("GEMINI_API_KEY", "")
