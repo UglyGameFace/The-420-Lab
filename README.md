@@ -334,3 +334,8 @@ Server managers may **opt into independent server reviews** via
 No Leafly proprietary reviews are reproduced. The separate
 `strain-profiles.sqlite3` storage file may be lost on hosting redeploy if
 persistent disk is not configured; deployment status does not prove retention.
+
+
+## Profile source fallback and real database counts
+
+Use /straindb or the public Database Info button for the exact offline strain-name count, source releases and freshness warnings. Server managers can publish this status using /straindb public:true. Use /strainprofile for enriched, credited cultivar context. The bot now tries CannaLib, then the publicly documented StrainAPI v1 API on an exact-match basis. See https://www.strainapi.com/api-terms/ for attribution and developer-use permission. Live provider results are not merged into the offline catalog count, and third-party images are not embedded without licensing. Real cannabinoid and terpene test values must be linked to a specific laboratory batch; the Cannlytics public dataset is linked as an independent batch-specific research source.
