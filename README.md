@@ -577,9 +577,20 @@ A Worker failure prevents staging; it does not silently revert to RAM intake.
 This is a candidate architecture, **not yet a live deployment**. It needs
 real Discloud RSS and disk-quota measurements, private R2 Worker deployment
 and credential setup, staging upload/restart/withdrawal tests, and verified
-database persistence/backups before being enabled for members. Keep a
-time-based R2 lifecycle expiration as a second cleanup mechanism; the
-application also issues object deletion after confirmed completion.
+database persistence/backups before being enabled for members. A 30-minute object expiry is enforced by the private Worker on GET/HEAD,
+and its five-minute Cron Trigger sweeps expired R2 originals. The bot also
+marks waiting queue records older than 30 minutes as `expired`, preserves
+the contributor's submission ID, and retries private object cleanup. **Do
+not automatically repost** interrupted Discord sends; those remain under
+staff recovery. The separate private bucket
+`the-weed-doctor-grower-staging` was created on Cloudflare with public R2
+access disabled and a verified 24-hour bucket lifecycle cleanup rule.
+That storage-level backstop is not a promise of exact minute-level expiry.
+
+Do not enable the queue until the Worker is deployed with the private binding
+and secret, and the matching `LAB_GROWER_QUEUE_TOKEN` is configured on
+Discloud. In production, the bot must also pass the existing
+`/growerstorage` restart-and-redeploy continuity test.
 
 **Hosting and memory:** `discloud.config` currently specifies `RAM=256`.
 The serialized upload path reduces image-processing peak usage, but cannot
