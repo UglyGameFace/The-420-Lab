@@ -21,6 +21,8 @@ class LocalLeaflyRow:
     rating: str
     effects: tuple[str, ...]
     flavors: tuple[str, ...]
+    catalog_type: str = ""
+    listed_terpene: str = ""
 
 
 def normalize(value: str) -> str:
@@ -45,6 +47,32 @@ def _terms(value: str) -> tuple[str, ...]:
     return tuple(x for x in terms if x)[:5]
 
 
+# The publicly mirrored 4,762-row file has columns such as relaxed/happy
+# rather than a single Effects column. They are user-report proportions with
+# unknown denominators, NOT probabilities, clinical effects or lab assays.
+_LEGACY_REPORTED_EFFECTS = (
+    "relaxed", "happy", "euphoric", "uplifted", "sleepy", "hungry",
+    "talkative", "creative", "energetic", "focused", "giggly", "tingly",
+    "aroused",
+)
+
+
+def _reported_effects(row: dict[str, str | None]) -> tuple[str, ...]:
+    observed = []
+    for key in _LEGACY_REPORTED_EFFECTS:
+        value = _field(row, key)
+        if not value.endswith("%"):
+            continue
+        try:
+            score = float(value[:-1])
+        except ValueError:
+            continue
+        if 0 < score <= 100:
+            observed.append((score, key.title()))
+    observed.sort(key=lambda item: (-item[0], item[1]))
+    return tuple(name for _, name in observed[:5])
+
+
 @lru_cache(maxsize=4)
 def _read_csv(filename: str, size: int, mtime_ns: int) -> dict[str, LocalLeaflyRow]:
     """File identity cache avoids repeated disk parsing; no remote fetch."""
@@ -66,8 +94,10 @@ def _read_csv(filename: str, size: int, mtime_ns: int) -> dict[str, LocalLeaflyR
                 rating = ""
             rows[key] = LocalLeaflyRow(
                 name, rating,
-                _terms(_field(row, "Effects", "effects")),
+                _terms(_field(row, "Effects", "effects")) or _reported_effects(row),
                 _terms(_field(row, "Flavor", "Flavors", "flavors")),
+                _clean(_field(row, "Type", "type"), 15),
+                _clean(_field(row, "most_common_terpene"), 35),
             )
     return rows
 
@@ -92,14 +122,20 @@ def licensed_data_summary(name: str) -> str:
     if record is None:
         return ""
     fields = [f"**Licensed local Leafly dataset:** {record.name}"]
+    if record.catalog_type:
+        fields.append("Historical catalog label: " + record.catalog_type)
+    if record.listed_terpene:
+        fields.append("Terpene named in historical catalog (not lab verified): "
+                      + record.listed_terpene)
     if record.rating:
         fields.append("User rating recorded in supplied snapshot: " + record.rating)
     if record.effects:
-        fields.append("Reported effects: " + ", ".join(record.effects))
+        fields.append("Historically reported effects (not predictive): " + ", ".join(record.effects))
     if record.flavors:
         fields.append("Reported flavors: " + ", ".join(record.flavors))
     fields.append(
         "This is an owner-supplied static export, not current live Leafly data. "
+        "Survey percentage denominators and record dates are unknown. "
         "User reports do not establish medical benefit, dosage, or product potency."
     )
     return "\n".join(fields)
