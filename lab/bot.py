@@ -310,9 +310,19 @@ async def leafly(interaction: discord.Interaction, name: app_commands.Range[str,
     if not await bot.admit_interaction(interaction):
         return
     bot.health.record("strain")
-    await interaction.response.send_message(
-        clip_discord(leafly_answer(name)), ephemeral=True,
-        allowed_mentions=discord.AllowedMentions.none())
+    try:
+        embed = strain_embed(name, interaction.guild_id, bot.strain_profiles)
+    except Exception:
+        logger.exception("Leafly profile view failed; falling back to linked references")
+        embed = None
+    if embed:
+        await interaction.response.send_message(
+            embed=embed, ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none())
+    else:
+        await interaction.response.send_message(
+            clip_discord(leafly_answer(name)), ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="straindb", description="See how large and up-to-date the Weed Doctor strain database is")
