@@ -406,7 +406,7 @@ class LegacyPanelUpgradeTests(unittest.IsolatedAsyncioTestCase):
         from lab.bot import bot
         from lab.panel import LabPanelView
         from types import SimpleNamespace
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock, patch, PropertyMock
         import asyncio
         view = LabPanelView(bot)
         old_button = SimpleNamespace(custom_id="the420lab:panel:v1:ask")
@@ -416,7 +416,9 @@ class LegacyPanelUpgradeTests(unittest.IsolatedAsyncioTestCase):
             embeds=[SimpleNamespace(title="Custom server research panel")],
             edit=AsyncMock())
         interaction = SimpleNamespace(message=post)
-        with patch.object(bot, "user", SimpleNamespace(id=42)):
+        # discord.Client.user is a read-only property, so patch the getter on its class.
+        with patch.object(type(bot), "user", new_callable=PropertyMock) as current_user:
+            current_user.return_value = SimpleNamespace(id=42)
             self.assertTrue(await view.interaction_check(interaction))
             await asyncio.sleep(0)
             await asyncio.sleep(0)
