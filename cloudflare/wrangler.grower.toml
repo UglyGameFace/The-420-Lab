@@ -8,3 +8,8 @@ bucket_name = "the-weed-doctor-grower-staging"
 
 # Set only through: wrangler secret put GROWER_INTAKE_TOKEN
 # Do not add routes, public bucket domains or token values to Git.
+
+# Expire original photos at 30 minutes (scheduled sweep); bucket has a
+# separately verified 24-hour R2 lifecycle backstop.
+[triggers]
+crons = ["*/5 * * * *"]
