@@ -57,7 +57,7 @@ def panel_embed(title: str | None = None, intro: str | None = None,
     embed.add_field(name="🧬 Cannabinoids", value="THC, CBD, CBG, CBN, THCA: sourced chemical facts.", inline=False)
     embed.add_field(name="🌱 Find Strains", value="Tap **Find Strains**, or use **/straininfo** and enter a name such as Northern Lights.", inline=False)
     embed.add_field(name="🔬 Research Library", value="PubMed, clinical trials, FDA reports, and official guides.", inline=False)
-    embed.set_footer(text="Answers are private • Evidence, not hype • Not a medical professional")
+    embed.set_footer(text="Centered selection pop-ups • Private replies • Not a medical professional")
     return embed
 
 async def answer(interaction: discord.Interaction, bot: LabBot, kind: str, value: str) -> None:
@@ -325,21 +325,18 @@ class LabPanelView(discord.ui.View):
     @discord.ui.button(label="Explore Topics", emoji="📚", style=discord.ButtonStyle.secondary,
                        custom_id="the420lab:panel:v1:topics", row=0)
     async def topics(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "**Explore evidence-based topics.** Choose one for a private research response.",
-            view=MemberMenu(self.bot, interaction.user.id, TopicSelect()), ephemeral=True)
+        from .popup import TopicPicker
+        await interaction.response.send_modal(TopicPicker(self.bot))
     @discord.ui.button(label="Cannabinoids", emoji="🧬", style=discord.ButtonStyle.secondary,
                        custom_id="the420lab:panel:v1:compounds", row=0)
     async def compounds(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "**Cannabinoid chemistry:** molecular facts, not medical recommendations.",
-            view=MemberMenu(self.bot, interaction.user.id, CompoundSelect()), ephemeral=True)
+        from .popup import CannabinoidPicker
+        await interaction.response.send_modal(CannabinoidPicker(self.bot))
     @discord.ui.button(label="Research Library", emoji="🔬", style=discord.ButtonStyle.secondary,
                        custom_id="the420lab:panel:v1:library", row=1)
     async def library(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "**Research Library:** PubMed research, clinical trials, agency guides, FDA reports and historical strain names.",
-            view=LibraryMenu(self.bot, interaction.user.id), ephemeral=True)
+        from .popup import LibraryPicker
+        await interaction.response.send_modal(LibraryPicker(self.bot))
     @discord.ui.button(label="Find Strains", emoji="🌱", style=discord.ButtonStyle.success,
                        custom_id="the420lab:panel:v1:strain", row=1)
     async def find_strains(self, interaction: discord.Interaction, button: discord.ui.Button):
