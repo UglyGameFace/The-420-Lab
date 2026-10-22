@@ -592,6 +592,18 @@ and secret, and the matching `LAB_GROWER_QUEUE_TOKEN` is configured on
 Discloud. In production, the bot must also pass the existing
 `/growerstorage` restart-and-redeploy continuity test.
 
+**Owner-only rollout check:** After deploying the bot, use `/growerready`
+in Discord to see its saved database-continuity status, aggregate queue
+states, whether R2 mode is enabled, and the result of an authenticated,
+photo-free Worker availability test. On Linux it also displays approximate
+peak **main process** RSS; this does not include the isolated image worker.
+This command does not expose R2 keys, access tokens, private Discord images,
+storage paths, or contributor identities. A green remote check confirms
+only that the Worker responded to an authenticated request; it is **not**
+proof that Discloud RAM, a real photo transfer, SQLite backups or restart
+recovery work. A false/disabled status is expected before adding the
+Worker secret, enabling its HTTPS endpoint, and setting Discloud variables.
+
 **Hosting and memory:** `discloud.config` currently specifies `RAM=256`.
 The serialized upload path reduces image-processing peak usage, but cannot
 prove a full Discord bot with other extensions fits that memory ceiling during

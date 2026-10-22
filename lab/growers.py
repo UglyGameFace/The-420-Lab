@@ -278,6 +278,18 @@ class GrowerHub:
             if count != 1:
                 raise RuntimeError("Upload reservation changed before queuing.")
 
+    def queue_snapshot(self) -> dict[str, int]:
+        """Aggregated staging counts only; never reveal guild or member data."""
+        counts = {status: 0 for status in ("receiving", "queued", "processing", "cleanup")}
+        with closing(self.profiles._connect()) as db:
+            for state, amount in db.execute(
+                """SELECT state, COUNT(*) FROM grower_stage_queue
+                GROUP BY state"""
+            ):
+                if state in counts:
+                    counts[state] = amount
+        return counts
+
     def stage_info(self, guild_id: int, submission_id: int):
         with closing(self.profiles._connect()) as db:
             return db.execute(

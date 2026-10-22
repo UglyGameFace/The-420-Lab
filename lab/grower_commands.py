@@ -6,6 +6,8 @@ from io import BytesIO
 from contextlib import closing
 import logging
 import os
+import secrets
+import sys
 
 import discord
 from discord import app_commands
@@ -166,6 +168,78 @@ def register_grower_commands(bot) -> None:
             result = "Storage check failed. Inspect the bot logs and configured database path."
         await interaction.response.send_message(
             result, ephemeral=True, allowed_mentions=NO_MENTIONS)
+
+    @bot.tree.command(name="growerready", description="Application owner: audit private queue rollout readiness")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def growerready(interaction: discord.Interaction):
+        if not await bot.is_owner(interaction.user):
+            await interaction.response.send_message(
+                "Only the application owner can inspect Grower Showcase rollout readiness.",
+                ephemeral=True, allowed_mentions=NO_MENTIONS)
+            return
+
+        # This is a read-only health report. Never send photo URLs, storage
+        # object keys, per-guild identities, filesystem paths or bearer tokens.
+        queue_mode = os.getenv("LAB_GROWER_R2_QUEUE_ENABLED", "false").lower() in (
+            "true", "1", "on")
+        lines = ["**The Weed Doctor | Grower Showcase readiness**",
+                 "Discloud memory configuration: verify `RAM=256` on deployed app "
+                 "(this command cannot inspect the Discloud allocation)."]
+        try:
+            state, _ = bot.growers.storage_status()
+            lines.append(f"SQLite continuity checkpoint: **{state.replace('_', ' ')}**")
+            counts = bot.growers.queue_snapshot()
+            lines.append(
+                "Private staged uploads: "
+                + " · ".join(f"{name} {counts[name]}" for name in
+                           ("receiving", "queued", "processing", "cleanup")))
+            storage_proven = bot.growers.storage_ready()
+        except Exception:
+            log.exception("Grower readiness SQLite inspection failed")
+            lines.append("SQLite/queue health: **unavailable**")
+            storage_proven = False
+
+        remote = False
+        if not queue_mode:
+            lines.append("R2 upload queue: **disabled by configuration**")
+        elif bot.grower_intake is None:
+            lines.append("R2 upload queue: **enabled but endpoint/token unavailable**")
+        else:
+            try:
+                # A random, nonexistent object returns HTTP 404 ONLY after
+                # authentication; no photos are transferred during this check.
+                probe = "photos/1/1/" + secrets.token_hex(16)
+                exists = await bot.grower_intake.exists(probe)
+                remote = not exists
+                lines.append(
+                    "Authenticated private Worker: "
+                    + ("**reachable** (no photo transferred)" if remote
+                       else "**unexpected object collision; investigate**"))
+            except Exception:
+                log.warning("Private Grower Showcase Worker readiness probe failed")
+                lines.append("Authenticated private Worker: **unavailable**")
+        if sys.platform.startswith("linux"):
+            try:
+                import resource
+                peak_mib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+                lines.append(f"Main bot process peak RSS: **{peak_mib:.1f} MiB** "
+                             "(Linux measurement, excludes image child processes).")
+            except Exception:
+                pass
+
+        if storage_proven and queue_mode and remote:
+            lines.append(
+                "**Result: ready for controlled staging tests, NOT verified for public rollout.** "
+                "Verify full Discloud redeploy persistence, image-worker memory, "
+                "moderation, withdrawals and backup restoration.")
+        else:
+            lines.append(
+                "**Result: photo queue rollout NOT ready.** Leave staged intake disabled "
+                "until the missing checks are fixed.")
+        await interaction.response.send_message(
+            "\n".join(lines)[:1950], ephemeral=True,
+            allowed_mentions=NO_MENTIONS)
 
     @bot.tree.command(name="growerconfig", description="Manager: enable a private-reviewed grower photo gallery")
     @app_commands.guild_only()
