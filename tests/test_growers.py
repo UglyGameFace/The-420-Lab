@@ -347,13 +347,14 @@ class GrowerCommandsTests(unittest.TestCase):
         names = {command.name: command for command in bot.tree.get_commands()}
         for cmd in ("growerconfig", "growersubmit", "growerqueue", "growerreview",
                     "growerprofile", "growerjournal", "growerwithdraw", "growerremove",
-                    "growerrecover", "growerstorage"):
+                    "growerrecover", "growerstorage", "growerready"):
             self.assertIn(cmd, names)
         for manager in ("growerconfig", "growerqueue", "growerreview", "growerremove",
                         "growerrecover"):
 
             self.assertTrue(names[manager].default_permissions.manage_guild)
         self.assertTrue(names["growerstorage"].default_permissions.administrator)
+        self.assertTrue(names["growerready"].default_permissions.administrator)
 
     def test_upload_and_profile_are_private_by_default(self):
         from inspect import signature
@@ -528,6 +529,58 @@ class GrowerPermissionCommandTests(unittest.IsolatedAsyncioTestCase):
             review.send.assert_not_awaited()
             self.assertIn("/growerstorage", interaction.response.send_message.await_args.args[0])
             self.assertFalse(hub.storage_ready())
+
+    async def test_queue_readiness_is_owner_only_and_never_checks_storage(self):
+        interaction = SimpleNamespace(
+            user=SimpleNamespace(id=80),
+            response=SimpleNamespace(send_message=AsyncMock()))
+        remote = SimpleNamespace(exists=AsyncMock())
+        with patch.object(bot, "is_owner", new_callable=AsyncMock, return_value=False), \
+             patch.object(bot, "grower_intake", remote):
+            await bot.tree.get_command("growerready").callback(interaction)
+        remote.exists.assert_not_awaited()
+        self.assertTrue(interaction.response.send_message.await_args.kwargs["ephemeral"])
+        self.assertIn("application owner",
+                      interaction.response.send_message.await_args.args[0])
+
+    async def test_queue_readiness_reports_remote_authenticated_without_photos(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hub = GrowerHub(StrainProfileStore(str(Path(directory) / "photos.sqlite3")))
+            hub.arm_storage_probe()
+            GrowerHub(StrainProfileStore(hub.profiles.path)).verify_storage_probe()
+            remote = SimpleNamespace(exists=AsyncMock(return_value=False))
+            interaction = SimpleNamespace(
+                user=SimpleNamespace(id=80),
+                response=SimpleNamespace(send_message=AsyncMock()))
+            with patch.object(bot, "is_owner", new_callable=AsyncMock, return_value=True), \
+                 patch.object(bot, "growers", hub), \
+                 patch.object(bot, "grower_intake", remote), \
+                 patch.dict("os.environ", {"LAB_GROWER_R2_QUEUE_ENABLED": "true"}):
+                await bot.tree.get_command("growerready").callback(interaction)
+            remote.exists.assert_awaited_once()
+            key = remote.exists.await_args.args[0]
+            self.assertTrue(key.startswith("photos/1/1/"))
+            self.assertEqual(len(key.split("/")[-1]), 32)
+            summary = interaction.response.send_message.await_args.args[0]
+            self.assertIn("controlled staging", summary)
+            self.assertIn("no photo transferred", summary)
+            self.assertNotIn(hub.profiles.path, summary)
+            self.assertTrue(interaction.response.send_message.await_args.kwargs["ephemeral"])
+
+    async def test_queue_readiness_fails_closed_on_missing_worker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hub = GrowerHub(StrainProfileStore(str(Path(directory) / "photos.sqlite3")))
+            interaction = SimpleNamespace(
+                user=SimpleNamespace(id=80),
+                response=SimpleNamespace(send_message=AsyncMock()))
+            with patch.object(bot, "is_owner", new_callable=AsyncMock, return_value=True), \
+                 patch.object(bot, "growers", hub), \
+                 patch.object(bot, "grower_intake", None), \
+                 patch.dict("os.environ", {"LAB_GROWER_R2_QUEUE_ENABLED": "true"}):
+                await bot.tree.get_command("growerready").callback(interaction)
+            content = interaction.response.send_message.await_args.args[0]
+            self.assertIn("rollout NOT ready", content)
+            self.assertIn("endpoint/token unavailable", content)
 
     async def test_storage_command_enforces_application_ownership(self):
         interaction = SimpleNamespace(
